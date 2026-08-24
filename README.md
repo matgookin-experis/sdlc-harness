@@ -59,7 +59,7 @@ Always run this checklist:
 
 ## 🆘 Need Help?
 
-- Read `SECURITY.md` for detailed guidelines
+- Read [SECURITY.md](SECURITY.MD) for detailed guidelines
 - Contact hackathon support through mentor channel
 - Ask in the hackathon Slack workspace
 
