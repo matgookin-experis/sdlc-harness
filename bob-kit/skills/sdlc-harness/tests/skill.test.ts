@@ -15,13 +15,43 @@
  * pure reasoning layer — no real HTTP calls, no Docker.
  */
 
+import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
+
 import { onboard } from '../src/skill/onboard';
-import { runAcAgent } from '../src/agents/ac-agent';
+import { runAcAgent, hasAcceptanceCriteria } from '../src/agents/ac-agent';
 import { runAmbiguityAgent } from '../src/agents/ambiguity-agent';
 import { runDependencyAgent } from '../src/agents/dependency-agent';
 import { runStateTransitionAgent } from '../src/agents/state-transition-agent';
-import { applyFinding, rejectFinding } from '../src/skill/review';
-import { readTelemetry } from '../src/skill/telemetry';
+import { runCoverageAgent } from '../src/agents/coverage-agent';
+import { applyFinding, rejectFinding, _resetSessionTracker } from '../src/skill/review';
+import { readTelemetry, computeAcceptanceRate } from '../src/skill/telemetry';
+import { stubWriterAdapter } from '../src/skill/gitlab-writer-adapter';
+import type { TelemetryEntry, DependencyFinding } from '../src/models';
+
+// ---------------------------------------------------------------------------
+// Telemetry isolation — use a fresh temp file for every test run
+// ---------------------------------------------------------------------------
+
+let tempTelemetryPath: string;
+
+beforeAll(() => {
+  tempTelemetryPath = path.join(os.tmpdir(), `sdlc-harness-test-${Date.now()}.jsonl`);
+  process.env['SDLC_TELEMETRY_PATH'] = tempTelemetryPath;
+});
+
+afterAll(() => {
+  delete process.env['SDLC_TELEMETRY_PATH'];
+  if (fs.existsSync(tempTelemetryPath)) {
+    fs.unlinkSync(tempTelemetryPath);
+  }
+});
+
+beforeEach(() => {
+  // Reset in-session conflict tracker between tests
+  _resetSessionTracker();
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -171,6 +201,90 @@ describe('AC agent', () => {
     const finding = await runAcAgent(issueWithAc, PROJECT_CONFIG);
     expect(finding).toBeNull();
   });
+
+  test('returns null for issue with inline Given/When/Then', async () => {
+    const issueWithInlineGWT = {
+      ...ISSUE_NO_AC,
+      description: 'Users need forecast data.\n\nGiven user is on dashboard\nWhen they look at forecast panel\nThen they see 5-day data',
+    };
+    const finding = await runAcAgent(issueWithInlineGWT, PROJECT_CONFIG);
+    expect(finding).toBeNull();
+  });
+
+  test('draft references concrete nouns from the title', async () => {
+    const finding = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
+    const ac = finding!.suggestedValue.toLowerCase();
+    // Should mention "weather" or "forecast" or "widget" from the title
+    const mentionsTitle = ac.includes('weather') || ac.includes('forecast') || ac.includes('widget');
+    expect(mentionsTitle).toBe(true);
+  });
+
+  // FIX-2: verb conjugated to third-person singular — "adds", not "add"
+  test('FIX-2: When line for "Add dark mode toggle to the settings page" is grammatical', async () => {
+    const issue = {
+      iid: 99,
+      title: 'Add dark mode toggle to the settings page',
+      description: 'Users want to switch between light and dark themes.',
+      labels: ['Story'],
+      state: 'opened',
+      assignee: null,
+    };
+    const finding = await runAcAgent(issue, PROJECT_CONFIG);
+    expect(finding).not.toBeNull();
+    const ac = finding!.suggestedValue;
+    // Leading verb must be conjugated: "adds", not "add"
+    expect(ac).toContain('adds dark mode toggle to the settings page');
+    // The When line must be grammatical
+    expect(ac).toMatch(/\*\*When\*\* the user adds dark mode toggle to the settings page/i);
+    // Must NOT contain the unconjugated base form in the When line
+    expect(ac).not.toMatch(/\*\*When\*\* the user add dark mode toggle/i);
+  });
+
+  // P0-3 regression: no "responds correctly" in AC output
+  test('P0-3: draft AC does not contain subjective qualifiers ("correctly", "properly")', async () => {
+    const finding = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
+    expect(finding).not.toBeNull();
+    const ac = finding!.suggestedValue.toLowerCase();
+    expect(ac).not.toContain('correctly');
+    expect(ac).not.toContain('properly');
+    expect(ac).not.toContain('nicely');
+  });
+
+  // FIX-3: single-line prose with given/when/then must NOT be detected as AC.
+  // The previous implementation used an inline regex that matched this exact sentence.
+  // The fix: require structural markers — each keyword must begin its own line.
+  test('FIX-3: prose sentence "Given...when...then" on one line is not AC', () => {
+    // This is the exact sentence from the defect report. Must return false.
+    const proseSentence = 'Given the deadline is tight, when we ship this, then keep scope small.';
+    expect(hasAcceptanceCriteria(proseSentence)).toBe(false);
+  });
+
+  test('FIX-3: structured multi-line GWT (each keyword starts its own line) IS detected as AC', () => {
+    const structuredGWT = 'Given a user is on the dashboard\nWhen they click the widget\nThen they see the forecast';
+    expect(hasAcceptanceCriteria(structuredGWT)).toBe(true);
+
+    // Bold markers (**Given** etc.) are also accepted
+    const boldGWT = '**Given** a user\n**When** they click\n**Then** they see the result';
+    expect(hasAcceptanceCriteria(boldGWT)).toBe(true);
+  });
+
+  test('FIX-3: prose with only two of three line-starting GWT keywords is not AC', () => {
+    const proseOnlyGivenThen = 'Given the deadline is tight,\nthen we should ship quickly.';
+    expect(hasAcceptanceCriteria(proseOnlyGivenThen)).toBe(false);
+  });
+
+  // P1-8 (kept): multi-paragraph prose with given/when/then only partially as line-starters
+  test('P1-8: multi-paragraph prose where "when" is not a line-starter is not AC', () => {
+    const multiParaProse = [
+      'The feature needs to be built.',
+      '',
+      'Given current constraints this will be challenging.',
+      'We should find time when the sprint allows.',
+      'Then we can revisit the architecture then.',
+    ].join('\n');
+    // "when" only appears mid-sentence, not as a line-starter → not structured GWT
+    expect(hasAcceptanceCriteria(multiParaProse)).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -178,7 +292,7 @@ describe('AC agent', () => {
 // ---------------------------------------------------------------------------
 
 describe('Ambiguity agent', () => {
-  test('flags vague language and proposes a concrete rewrite', async () => {
+  test('flags vague language and proposes advisory guidance', async () => {
     const finding = await runAmbiguityAgent(ISSUE_VAGUE, PROJECT_CONFIG);
 
     expect(finding).not.toBeNull();
@@ -186,10 +300,13 @@ describe('Ambiguity agent', () => {
     expect(finding!.agent).toBe('AM');
 
     const rewrite = finding!.suggestedValue as string;
-    // The rewrite should name the specific component, not "the thing"
-    expect(rewrite.toLowerCase()).not.toContain('the thing');
-    // Must be more specific than the original
+    // The guidance must be longer than the original description
     expect(rewrite.length).toBeGreaterThan(ISSUE_VAGUE.description.length);
+    // The guidance must be advisory (contains structured prompts)
+    expect(rewrite).toContain('Advisory');
+    // Must not use fill-in placeholder syntax
+    expect(rewrite).not.toContain('[specific action]');
+    expect(rewrite).not.toContain('[specific condition]');
   });
 
   test('returns null for a clear, specific description', async () => {
@@ -200,6 +317,64 @@ describe('Ambiguity agent', () => {
 
     const finding = await runAmbiguityAgent(clearIssue, PROJECT_CONFIG);
     expect(finding).toBeNull();
+  });
+
+  test('flags "TBD" placeholder', async () => {
+    const tbdIssue = {
+      ...ISSUE_NO_AC,
+      description: 'Implementation details TBD. Will figure out later.',
+    };
+    const finding = await runAmbiguityAgent(tbdIssue, PROJECT_CONFIG);
+    expect(finding).not.toBeNull();
+    expect(finding!.agent).toBe('AM');
+  });
+
+  test('flags "does not work" non-testable description', async () => {
+    const nonTestableIssue = {
+      ...ISSUE_VAGUE,
+      description: 'The login button does not work in production.',
+    };
+    const finding = await runAmbiguityAgent(nonTestableIssue, PROJECT_CONFIG);
+    expect(finding).not.toBeNull();
+  });
+
+  test('does not false-positive on specific technical description with code references', async () => {
+    const technicalIssue = {
+      iid: 42,
+      title: 'Add rate limiting to /api/auth/login endpoint',
+      description: 'Implement express-rate-limit middleware on `POST /api/auth/login` to limit to 10 requests/minute per IP. Return HTTP 429 with Retry-After header on breach. Configure threshold in `config/rate-limits.ts`.',
+      labels: ['Task'],
+      state: 'opened',
+      assignee: null,
+    };
+    const finding = await runAmbiguityAgent(technicalIssue, PROJECT_CONFIG);
+    expect(finding).toBeNull();
+  });
+
+  // P0-3 cross-agent regression: runAcAgent output must not trigger runAmbiguityAgent
+  test('P0-3: runAcAgent output does not trigger runAmbiguityAgent', async () => {
+    const acFinding = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
+    expect(acFinding).not.toBeNull();
+
+    // Feed the AC draft as a description to the ambiguity agent
+    const issueWithAcDraft = {
+      ...ISSUE_NO_AC,
+      description: acFinding!.suggestedValue,
+    };
+    const amFinding = await runAmbiguityAgent(issueWithAcDraft, PROJECT_CONFIG);
+    // The AC agent's own output must not be flagged as vague
+    expect(amFinding).toBeNull();
+  });
+
+  // P0-4: advisory-only — suggestedValue should not look like verbatim replacement
+  test('P0-4: AM finding is marked advisory-only in reason and suggestedValue is not plain text', async () => {
+    const finding = await runAmbiguityAgent(ISSUE_VAGUE, PROJECT_CONFIG);
+    expect(finding).not.toBeNull();
+    // Reason must mention "ADVISORY"
+    expect(finding!.reason?.toUpperCase()).toContain('ADVISORY');
+    // suggestedValue must NOT contain "[specific action]" or "[specific condition]" placeholders
+    expect(finding!.suggestedValue).not.toContain('[specific action]');
+    expect(finding!.suggestedValue).not.toContain('[specific condition]');
   });
 });
 
@@ -230,6 +405,69 @@ describe('Dependency agent', () => {
 
     const findings = await runDependencyAgent(unrelated, PROJECT_CONFIG);
     expect(findings).toHaveLength(0);
+  });
+
+  test('does not produce self-links', async () => {
+    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    for (const f of findings) {
+      expect(f.sourceIid).not.toBe(f.targetIid);
+    }
+  });
+
+  test('does not produce duplicate pairs', async () => {
+    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    const pairs = findings.map((f) => `${Math.min(f.sourceIid, f.targetIid)}-${Math.max(f.sourceIid, f.targetIid)}`);
+    const uniquePairs = new Set(pairs);
+    expect(pairs.length).toBe(uniquePairs.size);
+  });
+
+  test('confidence is between 0 and 1', async () => {
+    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    for (const f of findings) {
+      expect(f.confidence).toBeGreaterThanOrEqual(0);
+      expect(f.confidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  // P2-10: direction — B says "Depends on" so A blocks B (sourceIid=A=3, targetIid=B=9)
+  test('P2-10: direction — issue carrying "Depends on" is the dependent (target), not the source', async () => {
+    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    const blocksFinding = findings.find((f) => f.suggestedLinkType === 'blocks');
+    if (blocksFinding) {
+      // ISSUE_AUTH_B (iid=9) says "Depends on the token refresh flow"
+      // → ISSUE_AUTH_B is the dependent side → ISSUE_AUTH_A (iid=3) blocks it
+      // So sourceIid must be 3 (prerequisite) and targetIid must be 9 (dependent)
+      expect(blocksFinding.sourceIid).toBe(3);
+      expect(blocksFinding.targetIid).toBe(9);
+    }
+    // If no blocks finding, both issues carried dependency language → falls back to relates-to, which is also acceptable
+  });
+
+  // P2-10: no /token refresh/ in BLOCKS_SIGNALS — issues without dep language → relates-to
+  test('P2-10: issues with shared tokens but no explicit dep language fall back to relates-to', async () => {
+    // Two issues about auth without any "depends on" / "requires" language
+    const issueA = {
+      iid: 20,
+      title: 'Auth session expiry handling',
+      description: 'The auth session should expire after 30 minutes of inactivity. Token refresh endpoint: /auth/refresh.',
+      labels: ['Story'],
+      state: 'opened',
+      assignee: null,
+    };
+    const issueB = {
+      iid: 21,
+      title: 'Auth token refresh endpoint',
+      description: 'Implement the token refresh endpoint at /auth/refresh to issue a new JWT.',
+      labels: ['Story'],
+      state: 'opened',
+      assignee: null,
+    };
+    const findings = await runDependencyAgent([issueA, issueB], PROJECT_CONFIG);
+    // Both have "token refresh" text; neither has "depends on" → should be relates-to
+    if (findings.length > 0) {
+      expect(findings[0].suggestedLinkType).toBe('relates-to');
+    }
+    // (If Jaccard < threshold, no finding at all — that's also fine)
   });
 });
 
@@ -285,6 +523,20 @@ describe('State-transition agent', () => {
       expect(finding.suggestedValue).not.toBe('Done');
     }
   });
+
+  test('proposes In Progress when a linked MR is open', async () => {
+    const openMr = { ...MR_MERGED_FOR_ISSUE_5, state: 'opened' };
+    const finding = await runStateTransitionAgent(
+      ISSUE_STALE_STATE,
+      [openMr],
+      PROJECT_CONFIG,
+    );
+
+    // "In Progress" must be a valid transition from "Open"
+    if (finding !== null) {
+      expect(finding.suggestedValue).toBe('In Progress');
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -295,12 +547,35 @@ describe('Human review interface', () => {
   const finding = {
     agent: 'AC' as const,
     issueIid: 12,
-    action: 'draft_ac',
+    action: 'draft_ac' as const,
     suggestedValue: 'Given a user\nWhen they open the dashboard\nThen they see the forecast widget',
   };
 
-  test('apply writes to GitLab and logs accepted outcome', async () => {
+  // FIX-1: defaultWriterAdapter returns written:false for writable findings,
+  // so the telemetry outcome must be 'failed', NOT 'accepted'.
+  // This prevents fabricated acceptance-rate numbers.
+  test('FIX-1: default unwired adapter logs outcome "failed", never "accepted"', async () => {
     const result = await applyFinding(finding, { editedValue: null });
+    // The default adapter is not wired to GitLab — write did not happen.
+    expect(result.gitlabWriteCalled).toBe(false);
+    // Must log 'failed', not 'accepted' — otherwise computeAcceptanceRate is wrong.
+    expect(result.telemetryEntry.outcome).toBe('failed');
+    // Verify directly from the telemetry file that no 'accepted' entry was written.
+    const entries = await readTelemetry();
+    const lastEntry = entries[entries.length - 1];
+    expect(lastEntry.outcome).toBe('failed');
+    expect(lastEntry.outcome).not.toBe('accepted');
+  });
+
+  // P0-1 (updated): stub adapter must still report accepted for real write
+  test('P0-1: stubWriterAdapter returns written:true — outcome is "accepted"', async () => {
+    const result = await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(result.telemetryEntry.outcome).toBe('accepted');
+  });
+
+  test('apply with stub writes to GitLab and logs accepted outcome', async () => {
+    const result = await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
 
     expect(result.gitlabWriteCalled).toBe(true);
     expect(result.telemetryEntry.outcome).toBe('accepted');
@@ -309,11 +584,12 @@ describe('Human review interface', () => {
 
   test('apply with edit writes the edited value and logs edited outcome', async () => {
     const editedAc = 'Given a logged-in user\nWhen they view the dashboard\nThen they see a 5-day forecast';
-    const result = await applyFinding(finding, { editedValue: editedAc });
+    const result = await applyFinding(finding, { editedValue: editedAc }, stubWriterAdapter);
 
     expect(result.gitlabWriteCalled).toBe(true);
     expect(result.writtenValue).toBe(editedAc);
     expect(result.telemetryEntry.outcome).toBe('edited');
+    // P2-9: editedFields derived from action — draft_ac → ['description']
     expect(result.telemetryEntry.editedFields).toContain('description');
   });
 
@@ -326,8 +602,287 @@ describe('Human review interface', () => {
 
   test('telemetry file grows by one entry per decision', async () => {
     const before = (await readTelemetry()).length;
-    await applyFinding(finding, { editedValue: null });
+    await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
     const after = (await readTelemetry()).length;
     expect(after).toBe(before + 1);
+  });
+
+  test('telemetry entries are append-only — earlier entries are preserved', async () => {
+    await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
+    const snap1 = await readTelemetry();
+    const len1 = snap1.length;
+
+    await rejectFinding(finding);
+    const snap2 = await readTelemetry();
+
+    // All entries from snap1 must still be present at the start of snap2
+    expect(snap2.length).toBe(len1 + 1);
+    for (let i = 0; i < snap1.length; i++) {
+      expect(snap2[i]).toEqual(snap1[i]);
+    }
+  });
+
+  test('rejected decision has no editedFields', async () => {
+    const result = await rejectFinding(finding);
+    expect(result.telemetryEntry.editedFields).toHaveLength(0);
+  });
+
+  test('telemetry entry has a valid ISO timestamp', async () => {
+    const result = await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
+    const ts = result.telemetryEntry.timestamp;
+    expect(new Date(ts).toISOString()).toBe(ts);
+  });
+
+  // P1-5: DependencyFinding can be passed to applyFinding / rejectFinding
+  test('P1-5: DependencyFinding can be passed to applyFinding — always report-only', async () => {
+    const depFinding: DependencyFinding = {
+      agent: 'DEP',
+      sourceIid: 3,
+      targetIid: 9,
+      suggestedLinkType: 'blocks',
+      reason: 'Issue #3 appears to block issue #9.',
+      confidence: 0.85,
+    };
+    const result = await applyFinding(depFinding, { editedValue: null }, stubWriterAdapter);
+    // Dependency findings are never written — no links API
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.telemetryEntry.outcome).toBe('accepted');
+    expect(result.telemetryEntry.agent).toBe('DEP');
+  });
+
+  test('P1-5: DependencyFinding can be passed to rejectFinding', async () => {
+    const depFinding: DependencyFinding = {
+      agent: 'DEP',
+      sourceIid: 3,
+      targetIid: 9,
+      suggestedLinkType: 'relates-to',
+      reason: 'Shared topic overlap.',
+      confidence: 0.65,
+    };
+    const result = await rejectFinding(depFinding);
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.telemetryEntry.outcome).toBe('rejected');
+    expect(result.telemetryEntry.agent).toBe('DEP');
+  });
+
+  // P1-6: advisory-only actions (rewrite_desc, missing_coverage) must not write
+  test('P1-6: rewrite_desc action is advisory-only — never written to GitLab', async () => {
+    const amFinding = {
+      agent: 'AM' as const,
+      issueIid: 7,
+      action: 'rewrite_desc' as const,
+      suggestedValue: 'Advisory guidance text.',
+    };
+    const result = await applyFinding(amFinding, { editedValue: null }, stubWriterAdapter);
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.telemetryEntry.outcome).toBe('accepted');
+  });
+
+  test('P1-6: missing_coverage action is report-only — never written to GitLab', async () => {
+    const covFinding = {
+      agent: 'COV' as const,
+      issueIid: 12,
+      action: 'missing_coverage' as const,
+      suggestedValue: 'Add a test that references issue #12.',
+    };
+    const result = await applyFinding(covFinding, { editedValue: null }, stubWriterAdapter);
+    expect(result.gitlabWriteCalled).toBe(false);
+  });
+
+  test('P1-6: draft_ac action is writable — stub adapter reports written:true', async () => {
+    const result = await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+  });
+
+  test('P1-6: state_transition action is writable — stub adapter reports written:true', async () => {
+    const stFinding = {
+      agent: 'ST' as const,
+      issueIid: 5,
+      action: 'state_transition' as const,
+      suggestedValue: 'In Review',
+    };
+    const result = await applyFinding(stFinding, { editedValue: null }, stubWriterAdapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+  });
+
+  // P2-9: editedFields derived from finding action
+  test('P2-9: state_transition edited → editedFields is ["state"]', async () => {
+    const stFinding = {
+      agent: 'ST' as const,
+      issueIid: 5,
+      action: 'state_transition' as const,
+      suggestedValue: 'In Review',
+    };
+    const result = await applyFinding(
+      stFinding,
+      { editedValue: 'Done' },
+      stubWriterAdapter
+    );
+    expect(result.telemetryEntry.editedFields).toEqual(['state']);
+  });
+
+  test('P2-9: draft_ac edited → editedFields is ["description"]', async () => {
+    const result = await applyFinding(
+      finding,
+      { editedValue: 'Edited AC text' },
+      stubWriterAdapter
+    );
+    expect(result.telemetryEntry.editedFields).toEqual(['description']);
+  });
+
+  test('P2-9: missing_coverage edited → editedFields is []', async () => {
+    const covFinding = {
+      agent: 'COV' as const,
+      issueIid: 12,
+      action: 'missing_coverage' as const,
+      suggestedValue: 'Add test.',
+    };
+    const result = await applyFinding(
+      covFinding,
+      { editedValue: 'something' },
+      stubWriterAdapter
+    );
+    expect(result.telemetryEntry.editedFields).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Telemetry — acceptance-rate summary
+// ---------------------------------------------------------------------------
+
+describe('Telemetry acceptance-rate', () => {
+  test('computes correct acceptance rate for a mixed log', () => {
+    const entries: TelemetryEntry[] = [
+      { timestamp: '2025-01-01T00:00:00.000Z', agent: 'AC', issueIid: 1, action: 'draft_ac', outcome: 'accepted', editedFields: [] },
+      { timestamp: '2025-01-01T00:00:01.000Z', agent: 'AC', issueIid: 2, action: 'draft_ac', outcome: 'accepted', editedFields: [] },
+      { timestamp: '2025-01-01T00:00:02.000Z', agent: 'AM', issueIid: 3, action: 'rewrite_desc', outcome: 'edited', editedFields: ['description'] },
+      { timestamp: '2025-01-01T00:00:03.000Z', agent: 'ST', issueIid: 4, action: 'state_transition', outcome: 'rejected', editedFields: [] },
+    ];
+
+    const summary = computeAcceptanceRate(entries);
+    // total = accepted + edited + rejected (failed is excluded)
+    expect(summary.total).toBe(4);
+    expect(summary.accepted).toBe(2);
+    expect(summary.edited).toBe(1);
+    expect(summary.rejected).toBe(1);
+    expect(summary.failed).toBe(0);
+    expect(summary.acceptanceRate).toBeCloseTo(0.5);
+    expect(summary.approvalRate).toBeCloseTo(0.75);
+  });
+
+  test('returns all zeros for an empty log', () => {
+    const summary = computeAcceptanceRate([]);
+    expect(summary.total).toBe(0);
+    expect(summary.acceptanceRate).toBe(0);
+    expect(summary.approvalRate).toBe(0);
+  });
+
+  test('100% acceptance rate when all are accepted', () => {
+    const entries: TelemetryEntry[] = Array.from({ length: 5 }, (_, i) => ({
+      timestamp: '2025-01-01T00:00:00.000Z',
+      agent: 'AC' as const,
+      issueIid: i + 1,
+      action: 'draft_ac' as const,
+      outcome: 'accepted' as const,
+      editedFields: [],
+    }));
+    const summary = computeAcceptanceRate(entries);
+    expect(summary.acceptanceRate).toBe(1);
+    expect(summary.approvalRate).toBe(1);
+  });
+
+  // FIX-1: failed entries excluded from total and rates
+  test('FIX-1: failed entries are excluded from total and do not inflate acceptance rate', () => {
+    const entries: TelemetryEntry[] = [
+      { timestamp: '2025-01-01T00:00:00.000Z', agent: 'AC', issueIid: 1, action: 'draft_ac', outcome: 'accepted', editedFields: [] },
+      { timestamp: '2025-01-01T00:00:01.000Z', agent: 'AC', issueIid: 2, action: 'draft_ac', outcome: 'failed',   editedFields: [] },
+      { timestamp: '2025-01-01T00:00:02.000Z', agent: 'AC', issueIid: 3, action: 'draft_ac', outcome: 'failed',   editedFields: [] },
+      { timestamp: '2025-01-01T00:00:03.000Z', agent: 'ST', issueIid: 4, action: 'state_transition', outcome: 'rejected', editedFields: [] },
+    ];
+
+    const summary = computeAcceptanceRate(entries);
+    // total excludes the 2 failed entries
+    expect(summary.total).toBe(2);       // accepted(1) + rejected(1)
+    expect(summary.accepted).toBe(1);
+    expect(summary.rejected).toBe(1);
+    expect(summary.failed).toBe(2);
+    // acceptance rate = 1/2 = 0.5 (not 1/4 = 0.25 which would be wrong)
+    expect(summary.acceptanceRate).toBeCloseTo(0.5);
+    // Without fix, accepted(1) / total(4) = 0.25 — inflated by phantom writes
+  });
+
+  test('FIX-1: all-failed log → total is 0, rates are 0', () => {
+    const entries: TelemetryEntry[] = [
+      { timestamp: '2025-01-01T00:00:00.000Z', agent: 'AC', issueIid: 1, action: 'draft_ac', outcome: 'failed', editedFields: [] },
+      { timestamp: '2025-01-01T00:00:01.000Z', agent: 'AC', issueIid: 2, action: 'draft_ac', outcome: 'failed', editedFields: [] },
+    ];
+    const summary = computeAcceptanceRate(entries);
+    expect(summary.total).toBe(0);
+    expect(summary.failed).toBe(2);
+    expect(summary.acceptanceRate).toBe(0);
+    expect(summary.approvalRate).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Test coverage linkage agent (Task 24 — P1)
+// ---------------------------------------------------------------------------
+
+describe('Coverage agent (Task 24 — P1)', () => {
+  const configWithCoverage = {
+    ...PROJECT_CONFIG,
+    coverage: { testFilePatterns: ['**/*.test.ts'], enabled: true },
+  };
+
+  const configCoverageDisabled = {
+    ...PROJECT_CONFIG,
+    coverage: { testFilePatterns: ['**/*.test.ts'], enabled: false },
+  };
+
+  test('returns empty findings when disabled (default)', async () => {
+    const findings = await runCoverageAgent(
+      [ISSUE_NO_AC, ISSUE_VAGUE],
+      { 'tests/app.test.ts': 'describe("app", () => { it("works", () => {}) })' },
+      configCoverageDisabled,
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  test('flags issues with no test reference when enabled', async () => {
+    const testContent = {
+      'tests/forecast.test.ts': 'it("renders forecast widget", () => { /* covers #12 */ })',
+    };
+    // ISSUE_NO_AC (iid=12) has a reference; ISSUE_VAGUE (iid=7) does not
+    const findings = await runCoverageAgent(
+      [ISSUE_NO_AC, ISSUE_VAGUE],
+      testContent,
+      configWithCoverage,
+    );
+
+    const flagged = findings.map((f) => f.issueIid);
+    expect(flagged).not.toContain(12);
+    expect(flagged).toContain(7);
+  });
+
+  test('returns empty when all issues are covered', async () => {
+    const testContent = {
+      'tests/all.test.ts': 'test issue #12 and closes #7',
+    };
+    const findings = await runCoverageAgent(
+      [ISSUE_NO_AC, ISSUE_VAGUE],
+      testContent,
+      configWithCoverage,
+    );
+    expect(findings).toHaveLength(0);
+  });
+
+  test('coverage findings have correct agent tag', async () => {
+    const findings = await runCoverageAgent(
+      [ISSUE_NO_AC],
+      {},
+      configWithCoverage,
+    );
+    expect(findings[0]?.agent).toBe('COV');
+    expect(findings[0]?.action).toBe('missing_coverage');
   });
 });
