@@ -48,6 +48,7 @@ const argsSchema = z.discriminatedUnion("action", [
     title: z.string().min(1).describe("MR title (Conventional Commits recommended)."),
     description: z.string().optional().describe("MR description (Markdown)."),
     labels: z.string().optional().describe("Comma-separated labels to apply."),
+    assignee_id: z.number().int().min(1).optional().describe("Assignee user ID."),
     remove_source_branch: z.boolean().optional().describe(
       "Delete source branch after merge. Defaults to true."
     ),
@@ -60,6 +61,7 @@ const argsSchema = z.discriminatedUnion("action", [
     labels: z.string().optional().describe(
       "Replacement comma-separated label list."
     ),
+    assignee_id: z.number().int().min(1).optional().describe("Replacement assignee user ID."),
   }),
   z.object({
     action: z.literal("close-mr"),
@@ -114,6 +116,7 @@ export const gitlabMrReaderWriterTool: ToolDefinition<typeof argsSchema> = {
           title: args.title,
           description: args.description,
           labels: args.labels,
+          assignee_id: args.assignee_id,
           remove_source_branch: args.remove_source_branch ?? true,
         });
 
@@ -122,6 +125,7 @@ export const gitlabMrReaderWriterTool: ToolDefinition<typeof argsSchema> = {
           title: args.title,
           description: args.description,
           labels: args.labels,
+          assignee_id: args.assignee_id,
         });
 
       case "close-mr":

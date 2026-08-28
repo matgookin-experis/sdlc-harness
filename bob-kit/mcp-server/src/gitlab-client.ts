@@ -182,12 +182,22 @@ export class GitLabClient {
 
   /**
    * Create a new issue.
+   *
+   * GitLab's create-issue API accepts labels as a comma-separated string.
+   * We convert the string[] from CreateIssueParams here before serialising.
    */
   async createIssue(params: CreateIssueParams): Promise<GitLabIssue> {
     const url = this.projectUrl("/issues");
+    const body: Record<string, unknown> = {
+      title: params.title,
+    };
+    if (params.description !== undefined) body["description"] = params.description;
+    if (params.labels !== undefined) body["labels"] = params.labels.join(",");
+    if (params.assignee_id !== undefined) body["assignee_id"] = params.assignee_id;
+    if (params.milestone_id !== undefined) body["milestone_id"] = params.milestone_id;
     return this.request<GitLabIssue>(url, {
       method: "POST",
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
     });
   }
 

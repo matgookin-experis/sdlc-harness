@@ -30,7 +30,7 @@ customModes:
       - The demo GitLab instance runs at http://localhost:8080 (see gitlab-local/).
       - The demo project is at http://localhost:8080/sdlc-harness/weather-dashboard.
       - Weather app source lives in weather-app/.
-      - Use the `gitlab-local` MCP server (registered as "gitlab-local" in mcp.json) for
+      - Use the `sdlc-harness` MCP server (registered as "sdlc-harness" in mcp.json) for
         all GitLab API calls — never use curl or glab directly.
       - WatsonX model in use: ibm/granite-3-3-8b-instruct via Bob's configured provider.
         For long-context tasks (full-backlog audit, dependency graph) prefer

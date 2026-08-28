@@ -32,7 +32,7 @@ mcp-server/
 
 ## Prerequisites
 
-- Node.js ≥ 18
+- Node.js ≥ 18.18
 - A GitLab instance with a Personal Access Token (`api` scope)
 
 ---

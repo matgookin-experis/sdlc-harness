@@ -9,6 +9,13 @@
  *  - get-template  : return the template for a specific work item type
  *  - validate-item : validate a title/description against the standard
  *                    and return a list of violations with suggested fixes
+ *
+ * Validation enforces:
+ *  - Per-type title length maximums (Epic/Feature: 60, User Story/Bug: 120, Task: 80)
+ *  - User Story titles must contain a complete Connextra structure:
+ *    "As a/an <role>, I can <action> so that <benefit>."
+ *  - Required description sections for Epic, Feature, and Bug
+ *  - Given/When/Then as structured lines (each on its own line starting with the keyword)
  */
 
 import { z } from "zod";
@@ -20,6 +27,55 @@ import type { ToolDefinition, ToolContext } from "../types.js";
 
 const WORK_ITEM_TYPES = ["Epic", "Feature", "User Story", "Bug", "Task"] as const;
 type WorkItemType = (typeof WORK_ITEM_TYPES)[number];
+
+/** Per-type maximum title lengths. */
+const TITLE_MAX_LENGTH: Record<WorkItemType, number> = {
+  Epic: 60,
+  Feature: 60,
+  "User Story": 120,
+  Bug: 120,
+  Task: 80,
+};
+
+/** Required description section headings for specific types. */
+const REQUIRED_DESCRIPTION_SECTIONS: Partial<Record<WorkItemType, string[]>> = {
+  Epic: ["## Hypothesis", "## Goals", "## Scope", "## Child Features"],
+  Feature: ["## Overview", "## Scope", "## Child Stories"],
+  Bug: [
+    "## Steps to Reproduce",
+    "## Expected Behaviour",
+    "## Actual Behaviour",
+    "## Environment",
+  ],
+};
+
+const EPIC_ACTION_PREFIX = /^(implement|build|create|add|develop|write|configure|set up)\b/i;
+const ACTION_VERBS = new Set([
+  "add",
+  "automate",
+  "build",
+  "configure",
+  "create",
+  "define",
+  "detect",
+  "document",
+  "draft",
+  "enable",
+  "fix",
+  "flag",
+  "implement",
+  "improve",
+  "integrate",
+  "migrate",
+  "refactor",
+  "remove",
+  "replace",
+  "support",
+  "test",
+  "update",
+  "validate",
+  "write",
+]);
 
 interface WorkItemTemplate {
   type: WorkItemType;
@@ -91,7 +147,7 @@ const TEMPLATES: Record<WorkItemType, WorkItemTemplate> = {
   "User Story": {
     type: "User Story",
     titleRules: [
-      "Connextra format: 'As a <role>, I can <action> so that <benefit>'.",
+      "Connextra format: 'As a/an <role>, I can <action> so that <benefit>'.",
       "Sentence case (only first word and proper nouns capitalised).",
       "Max 120 characters.",
     ],
@@ -175,6 +231,87 @@ const TEMPLATES: Record<WorkItemType, WorkItemTemplate> = {
 };
 
 // ---------------------------------------------------------------------------
+// Connextra validation helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates that a User Story title follows the complete Connextra structure:
+ *   As a/an <role>, I can <action> so that <benefit>.
+ *
+ * The validation is case-insensitive and allows optional trailing punctuation.
+ */
+function isValidConnextra(title: string): boolean {
+  const match = /^As an? (.+),\s+I can (.+)\s+so that (.+?)[.!?]?$/i.exec(title.trim());
+  return match !== null && match.slice(1).every((part) => /[a-z0-9]/i.test(part));
+}
+
+/**
+ * Validate the bold Connextra narrative required in User Story descriptions.
+ * @param description Work-item description.
+ * @returns Whether the narrative contains meaningful role, action, and benefit clauses.
+ */
+function hasConnextraNarrative(description: string): boolean {
+  const match = /\*\*As an?\*\*\s+(.+?),\s+\*\*I can\*\*\s+(.+?)\s+\*\*so that\*\*\s+(.+?)(?:\r?\n|$)/i.exec(
+    description,
+  );
+  return match !== null && match.slice(1).every((part) => /[a-z0-9]/i.test(part));
+}
+
+/**
+ * Check for an exact Markdown section heading followed by content.
+ * @param description Work-item description.
+ * @param section Required heading.
+ * @returns Whether the exact heading is present.
+ */
+function hasSection(description: string, section: string): boolean {
+  const lines = description.split(/\r?\n/);
+  const index = lines.findIndex((line) => line.trim() === section);
+  if (index < 0) {
+    return false;
+  }
+
+  for (const line of lines.slice(index + 1)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    return !/^##\s+/.test(trimmed);
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Given/When/Then structured validation helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates that AC contains at least one complete Given/When/Then scenario
+ * as structured lines (each keyword on its own line).
+ *
+ * Accepts both "**Given**" (bold) and "Given" (plain) line starts.
+ */
+function hasStructuredGWT(ac: string): boolean {
+  const keywords = ac
+    .split(/\r?\n/)
+    .map((line) => /^(?:\*\*)?(given|when|then)(?:\*\*)?\s+(.+)$/i.exec(line.trim()))
+    .filter((match): match is RegExpExecArray => match !== null)
+    .map((match) => match[1]?.toLowerCase());
+
+  for (let index = 0; index <= keywords.length - 3; index += 1) {
+    if (
+      keywords[index] === "given" &&
+      keywords[index + 1] === "when" &&
+      keywords[index + 2] === "then"
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Validation helper
 // ---------------------------------------------------------------------------
 
@@ -194,21 +331,62 @@ function validateItem(
   const violations: ValidationViolation[] = [];
 
   // --- Title checks ---
-  if (title.length > 120) {
+  const maxLen = TITLE_MAX_LENGTH[type];
+  const trimmedTitle = title.trim();
+  if (trimmedTitle.length === 0) {
     violations.push({
       field: "title",
-      rule: "Title exceeds 120 characters.",
+      rule: "Title is empty.",
+      suggestion: `Example: "${template.example.title}"`,
+    });
+  }
+
+  if (title.length > maxLen) {
+    violations.push({
+      field: "title",
+      rule: `${type} titles must not exceed ${maxLen} characters (current: ${title.length}).`,
       suggestion: "Shorten to the core action/outcome.",
     });
   }
-  if (type === "User Story" && !title.toLowerCase().startsWith("as a")) {
+
+  if (type === "Epic" && EPIC_ACTION_PREFIX.test(trimmedTitle)) {
     violations.push({
       field: "title",
-      rule: "User Story titles must follow Connextra format: 'As a <role>, I can...'.",
-      suggestion: `Rewrite as: "${template.example.title}"`,
+      rule: "Epic titles must describe a capability and must not start with an action verb.",
+      suggestion: `Example: "${template.example.title}"`,
     });
   }
-  if (type === "Bug" && !title.includes(":")) {
+
+  if ((type === "Epic" || type === "Feature" || type === "Task") && /^[a-z]/.test(trimmedTitle)) {
+    violations.push({
+      field: "title",
+      rule: `${type} titles must start with an uppercase letter.`,
+      suggestion: `Example: "${template.example.title}"`,
+    });
+  }
+
+  if (type === "Feature" || type === "Task") {
+    const firstWord = trimmedTitle.split(/\s+/, 1)[0]?.toLowerCase() ?? "";
+    if (trimmedTitle.length > 0 && !ACTION_VERBS.has(firstWord)) {
+      violations.push({
+        field: "title",
+        rule: `${type} titles must start with an imperative action verb.`,
+        suggestion: `Example: "${template.example.title}"`,
+      });
+    }
+  }
+
+  if (type === "User Story") {
+    if (!isValidConnextra(title)) {
+      violations.push({
+        field: "title",
+        rule: "User Story titles must follow complete Connextra format: 'As a/an <role>, I can <action> so that <benefit>'.",
+        suggestion: `Example: "${template.example.title}"`,
+      });
+    }
+  }
+
+  if (type === "Bug" && !/^\S(?:.*\S)?:\s+\S/.test(trimmedTitle)) {
     violations.push({
       field: "title",
       rule: "Bug titles must follow '<Component>: <symptom>' format.",
@@ -223,6 +401,28 @@ function validateItem(
       rule: "Description is empty.",
       suggestion: `Use the ${type} template:\n${template.descriptionStructure}`,
     });
+  } else {
+    // Check required sections for types that mandate them
+    const requiredSections = REQUIRED_DESCRIPTION_SECTIONS[type];
+    if (requiredSections) {
+      for (const section of requiredSections) {
+        if (!hasSection(description, section)) {
+          violations.push({
+            field: "description",
+            rule: `${type} descriptions must include the "${section}" section.`,
+            suggestion: `Add the section heading and its content. Full template:\n${template.descriptionStructure}`,
+          });
+        }
+      }
+    }
+
+    if (type === "User Story" && !hasConnextraNarrative(description)) {
+      violations.push({
+        field: "description",
+        rule: "User Story descriptions must include a bold Connextra narrative.",
+        suggestion: `Use the User Story template:\n${template.descriptionStructure}`,
+      });
+    }
   }
 
   // --- Acceptance criteria checks (User Story and Bug only) ---
@@ -233,17 +433,12 @@ function validateItem(
         rule: "Acceptance criteria are required for User Stories and Bugs.",
         suggestion: `Use Given-When-Then format:\n${template.acceptanceCriteriaFormat}`,
       });
-    } else {
-      const hasGiven = /given/i.test(acceptanceCriteria);
-      const hasWhen = /when/i.test(acceptanceCriteria);
-      const hasThen = /then/i.test(acceptanceCriteria);
-      if (!hasGiven || !hasWhen || !hasThen) {
-        violations.push({
-          field: "acceptanceCriteria",
-          rule: "Acceptance criteria must use Given-When-Then structure.",
-          suggestion: `Example:\n${template.acceptanceCriteriaFormat}`,
-        });
-      }
+    } else if (!hasStructuredGWT(acceptanceCriteria)) {
+      violations.push({
+        field: "acceptanceCriteria",
+        rule: "Acceptance criteria must use structured Given-When-Then format with each keyword on its own line.",
+        suggestion: `Example:\n${template.acceptanceCriteriaFormat}`,
+      });
     }
   }
 

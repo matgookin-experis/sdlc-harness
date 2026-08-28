@@ -116,17 +116,19 @@ export interface GitLabNote {
 export interface CreateIssueParams {
   title: string;
   description?: string;
+  /** Comma-separated label names — GitLab's create-issue labels field. */
   labels?: string[];
-  assignee_ids?: number[];
+  assignee_id?: number;
   milestone_id?: number;
 }
 
 export interface UpdateIssueParams {
   title?: string;
   description?: string;
+  /** Comma-separated label names for the update API. */
   labels?: string;
   state_event?: "close" | "reopen";
-  assignee_ids?: number[];
+  assignee_id?: number;
   milestone_id?: number;
 }
 

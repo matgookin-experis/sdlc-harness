@@ -37,8 +37,9 @@ This installs dependencies, builds the TypeScript MCP server, merges Bob config,
    ```bash
    cd bob-kit/mcp-server && npm install && npm run build
    ```
-   Then merge `mcp-server/` entry into Bob's global MCP config via `node bob-kit/mcp-server/merge-bob-config.mjs`.
-2. **Rules** — copy files from `rules/` into your workspace `.bob/rules/`
+   Then merge the server into `~/.bob/settings/mcp.json` via
+   `node bob-kit/mcp-server/merge-bob-config.mjs`.
+2. **Rules** — copy files from `rules/` into `~/.bob/rules/`
 3. **Skills** — copy the `sdlc-harness/` folder from `skills/` into `~/.bob/skills/`
 4. **Modes** — merge `custom_modes.yaml` into `~/.bob/settings/custom_modes.yaml`
 5. **WatsonX** — Bob IDE → Settings → Providers → WatsonX; set API Key, Project ID, Endpoint URL,

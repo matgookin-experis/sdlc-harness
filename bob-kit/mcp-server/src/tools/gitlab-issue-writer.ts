@@ -13,6 +13,8 @@
  *  (case-insensitive exact match). If a duplicate is found it is returned
  *  with a `duplicate` flag set to true and NO new issue is created. The
  *  caller must explicitly pass `force: true` to bypass this check.
+ *
+ *  Duplicate detection follows all matching result pages before creating.
  */
 
 import { z } from "zod";
@@ -24,8 +26,8 @@ const argsSchema = z.discriminatedUnion("action", [
     title: z.string().min(1).describe("Issue title."),
     description: z.string().optional().describe("Issue description (Markdown)."),
     labels: z.array(z.string()).optional().describe("Label names to apply."),
-    milestone: z.string().optional().describe("Milestone title to assign."),
-    assignee: z.string().optional().describe("Assignee username."),
+    milestone_id: z.number().int().optional().describe("Milestone ID to assign."),
+    assignee_id: z.number().int().min(1).optional().describe("Assignee user ID."),
     force: z.boolean().optional().describe(
       "Set true to create even if a duplicate title is found. Default false."
     ),
@@ -43,6 +45,12 @@ const argsSchema = z.discriminatedUnion("action", [
     ),
     remove_labels: z.array(z.string()).optional().describe(
       "Labels to REMOVE without touching others."
+    ),
+    milestone_id: z.number().int().min(0).optional().describe(
+      "Milestone ID to assign. Pass 0 to remove the milestone."
+    ),
+    assignee_id: z.number().int().min(0).optional().describe(
+      "Replacement assignee user ID. Pass 0 to clear the assignee."
     ),
   }),
   z.object({
@@ -76,19 +84,26 @@ async function checkDuplicate(
   context: ToolContext
 ): Promise<DuplicateCheckResult> {
   const normalised = title.trim().toLowerCase();
-  const candidates = await context.gitlab.listIssues({
-    state: "opened",
-    search: title,
-    per_page: 20,
-  });
+  const perPage = 100;
 
-  const match = candidates.find(
-    (issue) => issue.title.trim().toLowerCase() === normalised
-  );
+  for (let page = 1; ; page += 1) {
+    const candidates = await context.gitlab.listIssues({
+      state: "opened",
+      search: title,
+      page,
+      per_page: perPage,
+    });
+    const match = candidates.find(
+      (issue) => issue.title.trim().toLowerCase() === normalised
+    );
 
-  return match
-    ? { isDuplicate: true, existing: match }
-    : { isDuplicate: false };
+    if (match) {
+      return { isDuplicate: true, existing: match };
+    }
+    if (candidates.length < perPage) {
+      return { isDuplicate: false };
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +145,7 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
   description:
     "Create and update GitLab issues for the configured project. " +
     "action='create-issue' creates a new issue with duplicate detection (pass force=true to bypass). " +
-    "action='update-issue' patches title, description, or labels on an existing issue. " +
+    "action='update-issue' patches title, description, labels, milestone, or assignees on an existing issue. " +
     "action='close-issue' / 'reopen-issue' change issue state. " +
     "action='add-note' posts a comment.",
   argsSchema,
@@ -155,7 +170,9 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
         return gitlab.createIssue({
           title: args.title,
           description: args.description,
-          labels: args.labels ? args.labels.join(",") as unknown as string[] : undefined,
+          labels: args.labels,
+          milestone_id: args.milestone_id,
+          assignee_id: args.assignee_id,
         });
       }
 
@@ -174,6 +191,8 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
           title: args.title,
           description: args.description,
           labels: labelString,
+          milestone_id: args.milestone_id,
+          assignee_id: args.assignee_id,
         });
       }
 
