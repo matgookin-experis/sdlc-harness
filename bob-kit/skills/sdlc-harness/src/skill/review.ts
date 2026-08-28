@@ -29,7 +29,7 @@
  *  - 'state_transition' — the suggested state must be applied via a scoped label
  *                         swap; the adapter receives the target state name.
  *  - 'missing_coverage' — report-only advisory; never written to GitLab.
- *  - 'rewrite_desc'     — advisory only (AM agent); never written to GitLab.
+ *  - 'rewrite_desc'     — replaces the description once the drafter has written it.
  *
  * Conflict detection:
  *  When `applyFinding` is called for an issue that already has a pending
@@ -86,13 +86,13 @@ function editedFieldsFor(finding: AnyFinding): string[] {
 
 /**
  * Returns true when the finding's action allows a write to GitLab.
- * Advisory-only findings ('rewrite_desc', 'missing_coverage') and
+ * Report-only findings ('missing_coverage') and
  * dependency findings (no links API yet) must never be written.
  */
 function isWritable(finding: AnyFinding): boolean {
   if (isDependencyFinding(finding)) return false;
   const action = (finding as AgentFinding).action;
-  return action === 'draft_ac' || action === 'state_transition';
+  return action === 'draft_ac' || action === 'rewrite_desc' || action === 'state_transition';
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +116,21 @@ export async function applyFinding(
   options: ReviewOptions,
   adapter: GitLabWriterAdapter = defaultWriterAdapter
 ): Promise<ReviewResult> {
+  // Agents hand over a brief, not prose. If the brief is still attached the drafter
+  // never ran and suggestedValue is a placeholder; writing it would put filler on the
+  // issue and log it as a success. An edited value means a human supplied the text.
+  if (
+    !isDependencyFinding(finding) &&
+    (finding as AgentFinding).draft &&
+    options.editedValue === null
+  ) {
+    const iid = (finding as AgentFinding).issueIid;
+    throw new Error(
+      `Finding for issue #${iid} has not been drafted. Replace suggestedValue with the ` +
+        `drafted text and clear the draft field before applying.`
+    );
+  }
+
   // User's intent — resolved against writeResult.written below for writable findings.
   const userIntent: 'accepted' | 'edited' =
     options.editedValue !== null ? 'edited' : 'accepted';

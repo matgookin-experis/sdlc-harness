@@ -178,17 +178,18 @@ describe('Onboarding flow', () => {
 // ---------------------------------------------------------------------------
 
 describe('AC agent', () => {
-  test('detects missing AC and returns a Given-When-Then draft', async () => {
+  test('detects missing AC and hands the drafter a brief', async () => {
     const finding = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
 
     expect(finding).not.toBeNull();
     expect(finding!.issueIid).toBe(12);
     expect(finding!.agent).toBe('AC');
 
-    const ac = finding!.suggestedValue as string;
-    expect(ac.toLowerCase()).toContain('given');
-    expect(ac.toLowerCase()).toContain('when');
-    expect(ac.toLowerCase()).toContain('then');
+    const brief = finding!.draft!;
+    expect(brief.context.title).toBe(ISSUE_NO_AC.title);
+    expect(brief.context.description).toBe(ISSUE_NO_AC.description);
+    expect(brief.task).toMatch(/given-when-then/i);
+    expect(brief.task).toMatch(/work-item-format/);
   });
 
   test('returns null for an issue that already has acceptance criteria', async () => {
@@ -211,16 +212,18 @@ describe('AC agent', () => {
     expect(finding).toBeNull();
   });
 
-  test('draft references concrete nouns from the title', async () => {
+  test('brief carries the issue text the drafter works from', async () => {
     const finding = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
-    const ac = finding!.suggestedValue.toLowerCase();
-    // Should mention "weather" or "forecast" or "widget" from the title
-    const mentionsTitle = ac.includes('weather') || ac.includes('forecast') || ac.includes('widget');
+    const brief = finding!.draft!;
+    const material = `${brief.context.title} ${brief.context.description}`.toLowerCase();
+    const mentionsTitle =
+      material.includes('weather') || material.includes('forecast') || material.includes('widget');
     expect(mentionsTitle).toBe(true);
   });
 
-  // FIX-2: verb conjugated to third-person singular — "adds", not "add"
-  test('FIX-2: When line for "Add dark mode toggle to the settings page" is grammatical', async () => {
+  // The drafter writes the prose now, so the agent's job is to rule out filler
+  // up front rather than to render a sentence of its own.
+  test('brief rules out the generic filler the old template produced', async () => {
     const issue = {
       iid: 99,
       title: 'Add dark mode toggle to the settings page',
@@ -231,13 +234,12 @@ describe('AC agent', () => {
     };
     const finding = await runAcAgent(issue, PROJECT_CONFIG);
     expect(finding).not.toBeNull();
-    const ac = finding!.suggestedValue;
-    // Leading verb must be conjugated: "adds", not "add"
-    expect(ac).toContain('adds dark mode toggle to the settings page');
-    // The When line must be grammatical
-    expect(ac).toMatch(/\*\*When\*\* the user adds dark mode toggle to the settings page/i);
-    // Must NOT contain the unconjugated base form in the When line
-    expect(ac).not.toMatch(/\*\*When\*\* the user add dark mode toggle/i);
+
+    const brief = finding!.draft!;
+    expect(brief.context.title).toBe('Add dark mode toggle to the settings page');
+    expect(brief.context.workItemType).toBe('User Story');
+    expect(brief.task).toMatch(/no filler/i);
+    expect(brief.task).toContain('responds correctly');
   });
 
   // P0-3 regression: no "responds correctly" in AC output
@@ -292,21 +294,18 @@ describe('AC agent', () => {
 // ---------------------------------------------------------------------------
 
 describe('Ambiguity agent', () => {
-  test('flags vague language and proposes advisory guidance', async () => {
+  test('flags vague wording and names the offending phrases', async () => {
     const finding = await runAmbiguityAgent(ISSUE_VAGUE, PROJECT_CONFIG);
 
     expect(finding).not.toBeNull();
     expect(finding!.issueIid).toBe(7);
     expect(finding!.agent).toBe('AM');
 
-    const rewrite = finding!.suggestedValue as string;
-    // The guidance must be longer than the original description
-    expect(rewrite.length).toBeGreaterThan(ISSUE_VAGUE.description.length);
-    // The guidance must be advisory (contains structured prompts)
-    expect(rewrite).toContain('Advisory');
-    // Must not use fill-in placeholder syntax
-    expect(rewrite).not.toContain('[specific action]');
-    expect(rewrite).not.toContain('[specific condition]');
+    const brief = finding!.draft!;
+    expect(brief.context.description).toBe(ISSUE_VAGUE.description);
+    // The drafter is told which spans to replace, not merely that something is wrong.
+    expect(brief.context.flaggedPhrases.length).toBeGreaterThan(0);
+    expect(finding!.reason).toMatch(/vague wording/i);
   });
 
   test('returns null for a clear, specific description', async () => {
@@ -366,15 +365,15 @@ describe('Ambiguity agent', () => {
     expect(amFinding).toBeNull();
   });
 
-  // P0-4: advisory-only — suggestedValue should not look like verbatim replacement
-  test('P0-4: AM finding is marked advisory-only in reason and suggestedValue is not plain text', async () => {
+  // A gap in the issue must become a question, never a plausible-looking invention.
+  test('unknowns tell the drafter to ask rather than invent', async () => {
     const finding = await runAmbiguityAgent(ISSUE_VAGUE, PROJECT_CONFIG);
     expect(finding).not.toBeNull();
-    // Reason must mention "ADVISORY"
-    expect(finding!.reason?.toUpperCase()).toContain('ADVISORY');
-    // suggestedValue must NOT contain "[specific action]" or "[specific condition]" placeholders
-    expect(finding!.suggestedValue).not.toContain('[specific action]');
-    expect(finding!.suggestedValue).not.toContain('[specific condition]');
+
+    const brief = finding!.draft!;
+    expect(brief.unknowns.length).toBeGreaterThan(0);
+    expect(brief.unknowns.join(' ')).toMatch(/ask the author/i);
+    expect(brief.task).toMatch(/rather than inventing/i);
   });
 });
 
@@ -665,17 +664,23 @@ describe('Human review interface', () => {
     expect(result.telemetryEntry.agent).toBe('DEP');
   });
 
-  // P1-6: advisory-only actions (rewrite_desc, missing_coverage) must not write
-  test('P1-6: rewrite_desc action is advisory-only — never written to GitLab', async () => {
+  test('rewrite_desc writes once the drafter has supplied the text', async () => {
     const amFinding = {
       agent: 'AM' as const,
       issueIid: 7,
       action: 'rewrite_desc' as const,
-      suggestedValue: 'Advisory guidance text.',
+      suggestedValue: 'Saving on the settings page returns a 500 when the display-name field is empty.',
     };
     const result = await applyFinding(amFinding, { editedValue: null }, stubWriterAdapter);
-    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.gitlabWriteCalled).toBe(true);
     expect(result.telemetryEntry.outcome).toBe('accepted');
+  });
+
+  test('applying an undrafted finding throws instead of writing the placeholder', async () => {
+    const undrafted = await runAcAgent(ISSUE_NO_AC, PROJECT_CONFIG);
+    await expect(
+      applyFinding(undrafted!, { editedValue: null }, stubWriterAdapter)
+    ).rejects.toThrow(/has not been drafted/);
   });
 
   test('P1-6: missing_coverage action is report-only — never written to GitLab', async () => {

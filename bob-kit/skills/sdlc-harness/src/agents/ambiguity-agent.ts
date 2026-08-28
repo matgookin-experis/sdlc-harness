@@ -1,169 +1,112 @@
-/**
- * ambiguity-agent.ts — Ambiguity Detection Agent (Task 21).
- *
- * Detects vague, subjective, placeholder, or non-testable wording in issue
- * titles and descriptions, and proposes a concrete rewrite.
- *
- * Returns null for clear, specific descriptions to avoid false positives.
- * This is a pure, deterministic function — no network calls, no side effects.
- *
- * ADVISORY ONLY: findings produced by this agent have action = 'rewrite_desc'
- * but the suggestedValue is a structured prompt rather than verbatim
- * replacement text.  The review interface must NOT write the suggestedValue
- * directly into the issue description; it should be presented to the author
- * as guidance.  This is documented in the reason field and in SKILL.md §Phase 4.
- */
-
-import type { IssueInput, ProjectConfig, AgentFinding } from '../models';
-
-// ---------------------------------------------------------------------------
-// Vagueness detection
-// ---------------------------------------------------------------------------
+import type { IssueInput, ProjectConfig, AgentFinding, DraftBrief } from '../models';
 
 /**
- * Vague-language patterns. Checked against the full title+description text.
+ * Wording that cannot be tested against. Each pattern captures the offending
+ * span so the drafter is told exactly what to replace, rather than being handed
+ * a vague complaint about the description as a whole.
  *
- * Each entry includes a label (for the reason) and the regex to match.
- * The patterns are ordered roughly from highest to lowest signal strength.
- *
- * NOTE: "correctly" and "properly" are NOT listed here because the AC agent's
- * own output template no longer uses them.  They were removed to prevent a
- * false-positive loop where agent 20 drafts text that agent 21 immediately flags.
+ * "correctly" and "properly" are deliberately absent: the AC agent's own output
+ * used to contain them, and flagging it created a loop where one agent's
+ * suggestion tripped the other's detector.
  */
 const VAGUE_PATTERNS: Array<{ label: string; re: RegExp }> = [
-  // Placeholder phrases
-  { label: 'placeholder phrase ("TBD", "TODO", "FIXME")',       re: /\b(tbd|todo|fixme|placeholder|xxx)\b/i },
-  // "the thing", "the stuff", "something", "somehow"
-  { label: 'non-specific pronoun ("the thing", "something")',   re: /\b(the\s+thing|the\s+stuff|something|somehow|some\s+way)\b/i },
-  // "it", "this" as the sole subject near a verb
-  { label: 'vague subject ("it doesn\'t work", "fix it")',      re: /\b(it\s+(doesn'?t|does\s+not|isn'?t|is\s+not)\s+work|fix\s+it\b)/i },
-  // "not work" / "doesn't work" without context
-  { label: 'non-testable description ("does not work")',        re: /\bdoes\s+not\s+work\b|\bdoesn'?t\s+work\b/i },
-  // "various", "several", "many" with no specifics
-  { label: 'vague quantity ("various", "several things")',      re: /\b(various|several\s+things|many\s+things|some\s+issues|a\s+few\s+things)\b/i },
+  { label: 'placeholder', re: /\b(tbd|todo|fixme|placeholder|xxx)\b/i },
+  { label: 'non-specific pronoun', re: /\b(the\s+thing|the\s+stuff|something|somehow|some\s+way)\b/i },
+  { label: 'vague subject', re: /\b(it\s+(?:doesn'?t|does\s+not|isn'?t|is\s+not)\s+work|fix\s+it)\b/i },
+  { label: 'non-testable claim', re: /\b(?:does\s+not|doesn'?t)\s+work\b/i },
+  { label: 'vague quantity', re: /\b(various|several\s+things|many\s+things|some\s+issues|a\s+few\s+things)\b/i },
 ];
 
-/** Minimum description length to be considered adequately specific. */
-const MIN_SPECIFIC_DESCRIPTION_LENGTH = 80;
-
-/** Indicators of a concrete, specific description. */
-const SPECIFICITY_SIGNALS: RegExp[] = [
-  /\/[a-z0-9_/-]+/,            // file path or endpoint
+/**
+ * Signals that an author has already been specific. Two or more of these in a
+ * description of reasonable length outweighs a single loose word.
+ */
+const SPECIFICITY_SIGNALS = [
+  /\/[a-z0-9_/-]+/,
+  /`[^`]+`/,
+  /https?:\/\//,
   /\bapi\b/i,
   /\bcomponent\b/i,
   /\bendpoint\b/i,
-  /`[^`]+`/,                    // inline code
-  /https?:\/\//,                // URL
   /\bclass\b|\bfunction\b|\bmethod\b/i,
 ];
 
-/**
- * Return the first matching vague pattern label, or null if none match.
- */
-function detectVagueness(text: string): string | null {
-  for (const { label, re } of VAGUE_PATTERNS) {
-    if (re.test(text)) return label;
-  }
-  return null;
-}
+const MIN_SPECIFIC_LENGTH = 80;
 
-/**
- * Return true if the description shows enough specificity signals that
- * the agent should not raise a finding even if a minor vague word appears.
- */
 function isConcreteEnough(description: string): boolean {
-  if (description.length >= MIN_SPECIFIC_DESCRIPTION_LENGTH) {
-    const signals = SPECIFICITY_SIGNALS.filter((re) => re.test(description)).length;
-    if (signals >= 2) return true;
+  if (description.length < MIN_SPECIFIC_LENGTH) return false;
+  return SPECIFICITY_SIGNALS.filter((re) => re.test(description)).length >= 2;
+}
+
+interface Flag {
+  label: string;
+  phrase: string;
+}
+
+function findVaguePhrases(text: string): Flag[] {
+  const flags: Flag[] = [];
+  for (const { label, re } of VAGUE_PATTERNS) {
+    const m = text.match(re);
+    if (m) flags.push({ label, phrase: m[0] });
   }
-  return false;
+  return flags;
 }
 
-// ---------------------------------------------------------------------------
-// Rewrite helper
-// ---------------------------------------------------------------------------
+/** Concrete anchors already present in the issue, offered to the drafter as reusable material. */
+function anchors(description: string): string[] {
+  const found = new Set<string>();
+  for (const re of [/`([^`]+)`/g, /\/[a-z0-9_/-]{3,}/g, /\b[A-Z][a-zA-Z]+(?:Error|Exception)\b/g]) {
+    for (const m of description.matchAll(re)) found.add(m[1] ?? m[0]);
+  }
+  return [...found];
+}
 
-/**
- * Generate a structured guidance prompt based on the detected vagueness.
- *
- * IMPORTANT: this is ADVISORY ONLY.  The returned text is a scaffold that
- * helps the author write a better description; it is NOT intended to replace
- * the description verbatim.  The review interface must present it as guidance
- * rather than writing it directly into the issue.
- *
- * The scaffold uses concrete nouns already present in the description
- * (code refs, file paths) so that the guidance is specific to the issue,
- * but no fill-in placeholders like "[specific action]" are used.
- */
-function buildRewrite(issue: IssueInput, vagueLabel: string): string {
+function buildBrief(issue: IssueInput, flags: Flag[]): DraftBrief {
   const desc = issue.description ?? '';
+  const reusable = anchors(desc);
 
-  // Extract any concrete nouns already present in the description
-  const codeRef = desc.match(/`([^`]+)`/)?.[1];
-  const pathRef = desc.match(/\/[a-z0-9_/-]+/)?.[0];
-  // Use a concrete reference from the description if one is available.
-  // Do NOT fall back to issue.title: the title may itself contain the vague
-  // language that triggered this finding, so echoing it into the suggestion
-  // would repeat the problem rather than model a better phrasing.
-  const anchor = codeRef ?? pathRef ?? 'this feature';
+  const unknowns = flags.map(
+    (f) =>
+      `"${f.phrase}" (${f.label}) has no concrete replacement in the issue. ` +
+      `Ask the author what it refers to instead of choosing a value.`
+  );
 
-  const lines: string[] = [
-    `**Advisory — vague wording detected** (${vagueLabel})`,
-    ``,
-    `The description needs more precision. Consider adding the following:`,
-    ``,
-    `**What specifically goes wrong or needs to change?**`,
-    `  Describe the exact symptom or requirement for "${anchor}".`,
-    ``,
-    `**What is the expected outcome?**`,
-    `  State the measurable, observable result.`,
-    ``,
-    `**What is the actual / current behaviour?**`,
-    `  Describe what happens now instead.`,
-    ``,
-    `**Relevant context** (file paths, endpoints, error messages, environment):`,
-    `  Add any paths, error codes, or configuration details that narrow the scope.`,
-  ];
-
-  return lines.join('\n');
+  return {
+    task:
+      'Rewrite this description so every statement can be verified. Preserve the ' +
+      'author\'s intent and keep their voice — this replaces their text, so do not ' +
+      'pad it, restructure it into a template, or add sections they did not ask for. ' +
+      'Replace each flagged phrase with detail drawn from the issue itself. Where the ' +
+      'issue does not supply that detail, leave a direct question to the author in its ' +
+      'place rather than inventing a value.',
+    context: {
+      title: issue.title,
+      description: desc,
+      flaggedPhrases: flags.map((f) => `${f.phrase} (${f.label})`).join('; '),
+      reusableDetail: reusable.join(', '),
+    },
+    unknowns,
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Agent entry point
-// ---------------------------------------------------------------------------
-
-/**
- * Run the ambiguity-detection agent against a single issue.
- *
- * @returns An AgentFinding with advisory rewrite guidance, or null if the
- *          description is already sufficiently specific.
- *
- * NOTE: the suggestedValue is ADVISORY ONLY — see module comment above.
- */
 export async function runAmbiguityAgent(
   issue: IssueInput,
   _config: ProjectConfig
 ): Promise<AgentFinding | null> {
-  const fullText = `${issue.title} ${issue.description ?? ''}`;
+  const desc = issue.description ?? '';
+  if (isConcreteEnough(desc)) return null;
 
-  // Fast-path: if the description is specific enough, skip
-  if (isConcreteEnough(issue.description ?? '')) {
-    return null;
-  }
+  const flags = findVaguePhrases(`${issue.title} ${desc}`);
+  if (flags.length === 0) return null;
 
-  const vagueLabel = detectVagueness(fullText);
-  if (!vagueLabel) return null;
-
-  const suggestedValue = buildRewrite(issue, vagueLabel);
+  const summary = flags.map((f) => `"${f.phrase}"`).join(', ');
 
   return {
     agent: 'AM',
     issueIid: issue.iid,
     action: 'rewrite_desc',
-    suggestedValue,
-    reason:
-      `Detected ${vagueLabel} in issue title or description. ` +
-      `The finding is ADVISORY ONLY — the suggestedValue is guidance for the author, ` +
-      `not replacement text to write verbatim into the description.`,
+    suggestedValue: `Description not yet rewritten for "${issue.title}".`,
+    draft: buildBrief(issue, flags),
+    reason: `Vague wording that cannot be tested against: ${summary}.`,
   };
 }

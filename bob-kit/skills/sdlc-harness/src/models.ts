@@ -57,6 +57,20 @@ export type AgentTag = 'AC' | 'AM' | 'DEP' | 'ST' | 'COV';
 /**
  * A finding produced by any single-issue agent (AC, AM, ST, COV).
  */
+/**
+ * What an agent hands to the drafter. Agents detect; they do not write prose.
+ *
+ * `context` is everything the drafter may ground the text in. `unknowns` are
+ * gaps the issue does not fill — the drafter must ask about these rather than
+ * invent a plausible value, which is the failure mode that makes generated
+ * work items worse than no work items.
+ */
+export interface DraftBrief {
+  task: string;
+  context: Record<string, string>;
+  unknowns: string[];
+}
+
 export interface AgentFinding {
   /** Agent that produced this finding. */
   agent: AgentTag;
@@ -72,6 +86,12 @@ export interface AgentFinding {
   action: 'draft_ac' | 'rewrite_desc' | 'state_transition' | 'missing_coverage';
   /** The proposed new value (AC text, rewritten description, or target state). */
   suggestedValue: string;
+  /**
+   * Present when the text still has to be written. The drafter replaces
+   * suggestedValue with its own prose and clears this field; applyFinding
+   * refuses to write a finding that still carries one.
+   */
+  draft?: DraftBrief;
   /** Human-readable explanation of why this finding was raised. Optional. */
   reason?: string;
 }

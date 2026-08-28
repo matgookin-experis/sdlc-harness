@@ -70,9 +70,9 @@ defined in `bob-kit/skills/sdlc-harness/src/models.ts`.
      standard inline here.
 -->
 
-_Templates not yet implemented — see Task 19. The standard itself lives in the
-`work-item-format` MCP tool; this phase wires the skill to call it, not
-re-author it._
+The standard lives in the `work-item-format` MCP tool, not here. Tasks 20 and 21 call
+`get-template` at drafting time (see Phase 3), so the template is fetched per work-item
+type rather than duplicated in this file or in the agent code.
 
 ---
 
@@ -117,25 +117,38 @@ TC is disabled by default (seed data has no test files). To enable:
 **Module:** `bob-kit/skills/sdlc-harness/src/agents/ac-agent.ts`
 **Export:** `runAcAgent(issue, config) → AgentFinding | null`
 
+The agent finds the issues that need criteria. **You write the criteria.** It returns a
+`draft` brief, never finished prose — `suggestedValue` holds a placeholder, and
+`applyFinding` throws if you try to apply a finding that still carries a brief.
+
 **Runtime behaviour:**
 
-1. For each issue (or the specified issue), call `runAcAgent(issue, projectConfig)`.
-2. If the return value is `null`, skip — the issue already has usable acceptance criteria.
-   Do **not** surface a finding. Return no finding to the user.
-3. If the return value is an `AgentFinding` with `agent: 'AC'`:
-   - The `suggestedValue` contains a Given-When-Then draft.
-   - Proceed to Phase 4 (Human Review) for this finding.
+1. Call `runAcAgent(issue, projectConfig)` for each issue in scope.
+2. `null` means the issue already has usable criteria. Skip it silently.
+3. Otherwise you get a finding with `draft: { task, context, unknowns }`:
+   - Call `work-item-format` with `action: "get-template"` and
+     `type: draft.context.workItemType`, and follow the structure it returns. That tool is
+     the single source of truth for format — do not invent your own layout here.
+   - Write 2–4 Given-When-Then criteria grounded in `draft.context.title` and
+     `draft.context.description`. Cover the main path and at least one failure case.
+   - If `draft.unknowns` is non-empty, those are gaps the issue does not fill. Put a
+     direct question to the author in place of each gap. Do not choose a plausible value.
+   - Replace `suggestedValue` with what you wrote, delete the `draft` field, then take the
+     finding to Phase 4.
 
-**AC detection rules (deterministic — no LLM required):**
-- Returns `null` if the description contains "Acceptance Criteria" (case-insensitive),
-  structured multi-line GWT (Given / When / Then each starting their own line), or "## AC".
-- Drafts a Given-When-Then skeleton from the issue title and description directly in
-  `ac-agent.ts`. **Does NOT call the `work-item-format` MCP tool** — that tool
-  integration is reserved for Phase 2 (Task 19) when the template standard is wired.
+**Write criteria that could only belong to this issue.** Anything that would read the same
+on an unrelated ticket is filler and should be rewritten — "the system responds correctly",
+"the change takes effect and is visible in the UI", "no data is corrupted". If the issue
+genuinely does not say enough to write a specific criterion, ask; a question is more useful
+to the author than a sentence that asserts nothing.
 
-**Tool calls:** Uses `gitlab-issue-reader` (action: `list-issues` or `get-issue`) to
-fetch issue data. **Never calls `gitlab-issue-writer` directly** — all writes go
-through the review interface.
+**Detection rules (deterministic, no model needed):** returns `null` when the description
+contains an "Acceptance Criteria" heading, `## AC`, `## Criteria`, or structured
+Given/When/Then where each clause opens its own line. Three keywords in one line of prose
+does not count.
+
+**Tool calls:** `gitlab-issue-reader` to fetch issues, `work-item-format` for the template.
+Never call `gitlab-issue-writer` directly — writes go through the review interface.
 
 ---
 
@@ -144,31 +157,42 @@ through the review interface.
 **Module:** `bob-kit/skills/sdlc-harness/src/agents/ambiguity-agent.ts`
 **Export:** `runAmbiguityAgent(issue, config) → AgentFinding | null`
 
+Same split as Task 20: the agent locates the vague wording, **you write the replacement.**
+The finding carries a `draft` brief and a placeholder `suggestedValue`.
+
 **Runtime behaviour:**
 
-1. For each issue, call `runAmbiguityAgent(issue, projectConfig)`.
-2. If the return value is `null`:
-   - The description is specific enough — no finding surfaced.
-   - Do NOT flag the issue. This avoids false positives on technically detailed descriptions.
-3. If the return value is an `AgentFinding` with `agent: 'AM'`:
-   - The `suggestedValue` is **advisory guidance only** — structured prompts that help the
-     author improve their description. It is NOT verbatim replacement text and must
-     **never be written directly into the issue description**.
-   - The `reason` field explains which vague pattern was detected.
-   - Present the guidance to the author for manual revision. Do not call `applyFinding`
-     with an AM finding; if the user types `apply`, inform them the AM finding is
-     advisory-only and ask them to rephrase the description themselves.
+1. Call `runAmbiguityAgent(issue, projectConfig)` for each issue in scope.
+2. `null` means the description is already specific. Do not flag it.
+3. Otherwise:
+   - `draft.context.flaggedPhrases` lists the exact spans that cannot be tested against.
+     Replace each one. Leave the rest of the description alone.
+   - `draft.context.reusableDetail` holds concrete material already in the issue — file
+     paths, code references, error names. Prefer these over anything you supply yourself.
+   - `draft.unknowns` lists flagged phrases with no replacement available in the issue.
+     Write a question to the author in place of each. Never fill one with a guess.
+   - Replace `suggestedValue` with the rewritten description, delete `draft`, then take the
+     finding to Phase 4.
 
-**False-positive avoidance:** The agent returns `null` for descriptions that contain ≥2
-specificity signals (file paths, endpoints, inline code, URLs, class/function/method
-references) AND are at least 80 characters long.
+**This replaces the author's text, so keep their voice.** Rewrite what is vague and nothing
+else. Do not expand a two-line bug report into a templated form with headings they did not
+ask for, and do not add scope the author never mentioned. The result should read like the
+same person wrote it on a better day.
 
-**Detected patterns:** placeholder phrases (TBD/TODO/FIXME), "the thing"/"something",
-"fix it"/"it doesn't work", and "does not work" without context.
-Note: subjective qualifiers ("properly", "correctly") were intentionally removed from
-detection to prevent the AC agent's own output from triggering the ambiguity agent.
+Approving an AM finding **writes to the issue description**. That is deliberate — a rewrite
+nobody can apply is not governance.
 
-**Tool calls:** Reads issues via `gitlab-issue-reader`. Never writes.
+**False-positive avoidance:** returns `null` when a description is at least 80 characters
+and carries two or more specificity signals (file paths, inline code, URLs, API/endpoint/
+component/class/function references).
+
+**Detected patterns:** placeholders (TBD/TODO/FIXME/XXX), non-specific pronouns
+("the thing", "something", "somehow"), vague subjects ("fix it", "it doesn't work"),
+non-testable claims ("does not work"), vague quantities ("various", "several things").
+"properly" and "correctly" are deliberately absent — the AC agent's old template used them,
+and flagging its output created a loop between the two agents.
+
+**Tool calls:** `gitlab-issue-reader` to fetch issues. Never writes directly.
 
 ---
 
@@ -348,9 +372,9 @@ Action-specific write semantics (for a real adapter):
 
 | `action` | Write operation | Notes |
 |---|---|---|
-| `draft_ac` | Append AC text to issue description | `update-issue` |
+| `draft_ac` | Append drafted AC to issue description | `update-issue`; refused while the finding still carries a `draft` |
 | `state_transition` | Apply scoped label swap; GitLab has only `opened`/`closed` states | `update-issue` |
-| `rewrite_desc` | **Never written** — advisory only | AM findings are guidance, not replacements |
+| `rewrite_desc` | Replace issue description with the drafted rewrite | `update-issue`; refused while the finding still carries a `draft` |
 | `missing_coverage` | **Never written** — report only | COV findings are informational |
 | `dependency_link` | **Never written** by the adapter — report only | No links API; use `add-note` outside review loop if needed |
 
