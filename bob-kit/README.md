@@ -11,8 +11,6 @@ bob-kit/
 │   ├── install.sh             — Idempotent full installer
 │   ├── merge-bob-config.mjs   — MERGE-ONLY Bob config installer
 │   └── .env.example           — Credentials template
-├── mcp/
-│   └── mcp.json               — Docker-based GitLab MCP config (alternative; merge into global mcp config)
 ├── rules/
 │   └── 01-sdlc-harness.md     — Project-specific agent behaviors
 ├── skills/
@@ -53,6 +51,5 @@ This installs dependencies, builds the TypeScript MCP server, merges Bob config,
 |---|---|
 | [`custom_modes.yaml`](./custom_modes.yaml) | `🔧 SDLC Harness` mode — role definition, tool groups, skill/model hints |
 | [`mcp-server/`](./mcp-server/) | Custom Node.js MCP server — GitLab issue/MR tools, work-item-format validator |
-| [`mcp/mcp.json`](./mcp/mcp.json) | Docker-based `gitlab-local` MCP server config (alternative to the Node server) |
 | [`AGENT_ORCHESTRATION.md`](./AGENT_ORCHESTRATION.md) | Conflict detection spec, telemetry JSONL format, P1 TC agent enablement |
 | [`skills/sdlc-harness/tests/skill.test.ts`](./skills/sdlc-harness/tests/skill.test.ts) | Jest tests covering onboarding, each agent's happy path, and the override/rejection path |
