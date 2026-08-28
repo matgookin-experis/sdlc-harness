@@ -9,10 +9,10 @@
  * the adapter is replaced by a mock so no live GitLab instance is required.
  *
  * MISSING INTEGRATION NOTE:
- * The `gitlab-issue-writer` MCP tool is registered in `mcp-server/src/tools/`
+ * The `gitlab-issue-writer` MCP tool is registered in `bob-kit/mcp-server/src/tools/`
  * and is reachable at runtime when the MCP server is running. However, calling
  * it from within the skill's TypeScript modules would require either:
- *   (a) running in-process (direct import from mcp-server/), or
+ *   (a) running in-process (direct import from bob-kit/mcp-server/), or
  *   (b) calling the MCP tool over stdio/transport.
  *
  * For the unit-test layer, this adapter uses a no-op stub. For the real runtime

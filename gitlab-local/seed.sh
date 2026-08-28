@@ -8,11 +8,27 @@
 # same directory as this script. Never falls back to a hardcoded value.
 set -euo pipefail
 
-# Load .env if present and GITLAB_ROOT_PASSWORD is not already set
+# Load .env if present and GITLAB_ROOT_PASSWORD is not already set.
+# Parsed line-by-line rather than `source`-d: `source` runs the file as bash,
+# so special characters in a value (e.g. a password of `Pa$$w0rd!`) get
+# expanded as shell syntax (`$$` = current PID) instead of taken literally.
+# Reading each line and assigning via parameter expansion avoids that —
+# the value is captured as inert string data, never re-parsed as code.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -z "${GITLAB_ROOT_PASSWORD:-}" ] && [ -f "$SCRIPT_DIR/.env" ]; then
-  # shellcheck disable=SC1091
-  set -a; source "$SCRIPT_DIR/.env"; set +a
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$value" in
+      \"*\") value="${value#\"}"; value="${value%\"}" ;;
+      \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    export "$key=$value"
+  done < "$SCRIPT_DIR/.env"
 fi
 
 if [ -z "${GITLAB_ROOT_PASSWORD:-}" ]; then
@@ -24,6 +40,12 @@ fi
 GITLAB_URL="http://localhost:8080"
 ROOT_PASSWORD="$GITLAB_ROOT_PASSWORD"
 DEMO_PASSWORD="$GITLAB_ROOT_PASSWORD"
+
+# Use a temp dir relative to SCRIPT_DIR so its path resolves to a real Windows
+# filesystem path (not /tmp) — docker cp requires a path that Windows can resolve.
+TMP_DIR="$SCRIPT_DIR/.seed-tmp"
+mkdir -p "$TMP_DIR"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 # ── Wait for GitLab to be ready ──────────────────────────────────────────────
 echo "Waiting for GitLab to be ready..."
@@ -44,22 +66,41 @@ done
 # ── Create a root API token via Rails runner (write to file inside container) -
 echo ""
 echo "Creating API token for root..."
-docker exec gitlab gitlab-rails runner "
-  begin
-    PersonalAccessToken.where(name: 'seed-script-token', user_id: 1).delete_all
-    token = User.find(1).personal_access_tokens.create!(
-      name: 'seed-script-token',
-      scopes: [:api],
-      expires_at: Date.today + 365
-    )
-    File.write('/tmp/seed_token.txt', token.token)
-  rescue => e
-    File.write('/tmp/seed_token.txt', 'ERROR: ' + e.message)
-  end
-" 2>/dev/null
+# Write the Ruby script to a local temp file and stream it into the container via
+# `docker exec -i ... sh -c 'cat > ...'`, redirecting from the local file with bash's
+# own `<` operator. This avoids inline-shell quoting issues and does not consume the
+# seed script's own stdin (which would break running this script itself via a pipe).
+# Deliberately NOT using `docker cp`: on Git Bash for Windows, `docker cp`'s host-side
+# source path (a POSIX path from $TMP_DIR) and its container-side dest path
+# (gitlab:/tmp/...) need opposite MSYS path-translation behavior, and a single
+# MSYS_NO_PATHCONV=1 applies to the whole command line — disabling translation for
+# the container path also breaks translation for the host path, so docker.exe
+# resolves it against the wrong root (e.g. "C:\c\Users\...") and cp silently fails.
+# Piping via stdin sidesteps this: bash opens the host file itself for the
+# redirect (no MSYS argv translation involved), and the only path-like text
+# reaching docker.exe is embedded inside the `sh -c '...'` string, which MSYS's
+# bare-absolute-path heuristic does not rewrite.
+cat > "$TMP_DIR/runner.rb" <<'RUBY'
+begin
+  PersonalAccessToken.where(name: 'seed-script-token', user_id: 1).delete_all
+  token = User.find(1).personal_access_tokens.create!(
+    name: 'seed-script-token',
+    scopes: [:api],
+    expires_at: Date.today + 365
+  )
+  File.write('/tmp/seed_token.txt', token.token)
+rescue => e
+  File.write('/tmp/seed_token.txt', 'ERROR: ' + e.message)
+end
+RUBY
+# MSYS_NO_PATHCONV=1 prevents Git Bash on Windows from translating /tmp/... container
+# paths to Windows paths when passed as arguments to docker exec.
+MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c 'cat > /tmp/runner.rb' < "$TMP_DIR/runner.rb" 2>/dev/null
+MSYS_NO_PATHCONV=1 docker exec gitlab gitlab-rails runner /tmp/runner.rb 2>/dev/null
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/runner.rb 2>/dev/null || true
 
-TOKEN=$(docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)
-docker exec gitlab rm -f /tmp/seed_token.txt 2>/dev/null || true
+TOKEN=$(MSYS_NO_PATHCONV=1 docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/seed_token.txt 2>/dev/null || true
 
 if [ -z "$TOKEN" ] || [[ "$TOKEN" == ERROR:* ]]; then
   echo "ERROR: Could not create API token: $TOKEN"
@@ -90,7 +131,7 @@ if [ -z "$GROUP_ID" ]; then
     "name": "SDLC Harness",
     "path": "sdlc-harness",
     "visibility": "internal",
-    "description": "IBM Hackathon — SDLC Harness demo group"
+    "description": "IBM Hackathon - SDLC Harness demo group"
   }' | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   echo "  Created group 'SDLC Harness' (id=$GROUP_ID)"
 else
@@ -142,7 +183,7 @@ if [ -z "$PROJECT_ID" ]; then
     \"namespace_id\": $GROUP_ID,
     \"visibility\": \"internal\",
     \"initialize_with_readme\": false,
-    \"description\": \"SDLC Harness demo app — a deterministic mock weather dashboard\"
+    \"description\": \"SDLC Harness demo app - a deterministic mock weather dashboard\"
   }" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   echo "  Created project 'weather-dashboard' (id=$PROJECT_ID)"
 else
@@ -191,9 +232,6 @@ if [ ! -d "$WEATHER_DIR" ]; then
   echo "  Make sure you are running this script from inside the sdlc-harness repo."
   exit 1
 fi
-
-TMP_DIR=$(mktemp -d)
-trap 'rm -rf "$TMP_DIR"' EXIT
 
 cp "$WEATHER_DIR/index.html"           "$TMP_DIR/index.html"
 cp "$WEATHER_DIR/styles.css"           "$TMP_DIR/styles.css"

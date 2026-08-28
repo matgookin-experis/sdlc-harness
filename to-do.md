@@ -50,9 +50,9 @@ Reused engineering scaffolding only — not the adjacent generic coding-assistan
 
 ## 2B. sdlc-harness Skill & Agents (the actual product)
 
-17. **Skill scaffold** `[P0]` — create the `SKILL.md` file for the `sdlc-harness` Bob skill with correct frontmatter (name, description, triggers) following the Bob skill authoring conventions.
-18. **Onboarding conversation flow** `[P0]` — define the guided conversation steps that collect project management tool type (GitLab Issues for the demo), project URL, work item types, workflow states, **and transition rules**; document the expected input/output for each step.
-19. **Work item template baseline** `[P0]` — author industry best-practice templates (User Story, Bug, Task, Epic) as structured prompts the skill applies when creating or reviewing work items.
+done - 17. **Skill scaffold** `[P0]` — create the `SKILL.md` file for the `sdlc-harness` Bob skill with correct frontmatter (name, description, triggers) following the Bob skill authoring conventions.
+mat in progress - 18. **Onboarding conversation flow** `[P0]` — define the guided conversation steps that collect project management tool type (GitLab Issues for the demo), project URL, work item types, workflow states, **and transition rules**; document the expected input/output for each step.
+mat in progress - 19. **Work item template baseline** `[P0]` — author industry best-practice templates (User Story, Bug, Task, Epic) as structured prompts the skill applies when creating or reviewing work items.
 20. **Acceptance criteria agent** `[P0]` — detects issues lacking acceptance criteria and drafts them using the work item description and template as context.
 21. **Ambiguity detection agent** `[P0]` — flags descriptions with vague language and proposes concrete rewrites.
 22. **Dependency suggestion agent** `[P0]` — scans open issues for semantic overlap and proposes `relates-to` / `blocks` links.
@@ -86,10 +86,10 @@ Reused engineering scaffolding only — not the adjacent generic coding-assistan
 
 > **Note on length:** the hackathon deliverable is a **≤3-minute video** with **at least 90 seconds** of on-screen solution demo, so the "under 15 minutes" walkthrough below is for internal rehearsal only — item 41 in Section 6 is the actual cut-down submission version.
 
-36. **Demo narrative** `[P0]` — write a concise story arc (≤ 1 page) that takes an observer from "blank project" to "agent-governed backlog," highlighting the four P0 agent actions (and the acceptance-rate number from telemetry, if ready). Draft the full internal walkthrough first, then mark which ~1–2 agent actions are strong enough to carry the 90-second cut-down.
-37. **Demo script** `[P0]` — produce a step-by-step facilitator script with exact Bob prompts, expected agent responses, narration lines for each beat, and fallback notes for each step.
+Mat - In Progress 36. **Demo narrative** `[P0]` — write a concise story arc (≤ 1 page) that takes an observer from "blank project" to "agent-governed backlog," highlighting the four P0 agent actions (and the acceptance-rate number from telemetry, if ready). Draft the full internal walkthrough first, then mark which ~1–2 agent actions are strong enough to carry the 90-second cut-down.
+Mat - In Progress 37. **Demo script** `[P0]` — produce a step-by-step facilitator script with exact Bob prompts, expected agent responses, narration lines for each beat, and fallback notes for each step.
 38. **Demo reset procedure** `[P1]` — write an idempotent script that tears down and re-seeds the GitLab project to a known state so the demo can be repeated cleanly (also makes re-takes of the video cheap).
-39. **Screen recording guide** `[P0]` — window layout, font sizes, and recording settings (resolution, cursor highlighting) so both the Bob chat pane and the GitLab browser view are legible on camera. Required now — it directly feeds the video deliverable in Section 6, not just an optional live demo.
+Mat - In Progress 39. **Screen recording guide** `[P0]` — window layout, font sizes, and recording settings (resolution, cursor highlighting) so both the Bob chat pane and the GitLab browser view are legible on camera. Required now — it directly feeds the video deliverable in Section 6, not just an optional live demo.
 40. **Demo review & dry run** `[P0]` — schedule and execute a full end-to-end dry run of the *long* walkthrough, capture issues, and update the demo script accordingly. Non-negotiable — always do this before recording the video.
 
 ---
@@ -104,3 +104,9 @@ The four required deliverables. All are `[P0]` — the MVP isn't "done" until th
 44. **Capture Bob task-session summary screenshots** `[P0]` — throughout the build, capture screenshots of Bob's task/session summaries showing Bob-assisted work (skill authoring, agent implementation, config wiring, debugging sessions). Save them into a repo folder (e.g. `docs/bob-sessions/`) as the build progresses — don't try to reconstruct these retroactively at submission time.
 45. **Organize & publish the code repository** `[P0]` — ensure all code, config, and docs (including items 43–44) are committed to a GitHub/GitLab/Bitbucket repo with a README explaining what's included and how to run it; confirm repo visibility matches submission requirements (public or explicitly shared with judges).
 46. **Final submission checklist** `[P0]` — before submitting, verify all four deliverables against their exact constraints: video is ≤3 min, publicly accessible, and shows ≥90s of on-screen solution + Bob visibly in use; written statement is ≤500 words; Bob-usage statement is specific (not generic) and covers watsonx if applicable; repo is organized, accessible, and contains the session screenshots.
+
+---
+
+## 7. Documentation Migration
+
+47. **Migrate all documentation to HTML/JavaScript** `[P1]` — convert every Markdown documentation file in the repo (`README.md`, `PROBLEM_STATEMENT.md`, `SECURITY.MD`, `to-do.md`, etc.) to self-contained HTML/JavaScript pages. No Markdown files should be used for documentation going forward; all human-readable docs must be delivered as HTML (with optional JS for navigation/interactivity). Store migrated docs under a `docs/` folder with a root `index.html` as the entry point.

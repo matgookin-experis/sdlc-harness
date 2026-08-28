@@ -1,19 +1,16 @@
 ---
 name: sdlc-harness
-description: >
-  Use when the user wants to govern work item quality, monitor a project backlog,
-  onboard a project management tool (GitLab Issues, Jira, Azure DevOps), draft
-  missing acceptance criteria, flag ambiguous descriptions, suggest dependency links,
-  propose state transitions, or review agent suggestions for work items. Activate
-  any time the user says "sdlc-harness", "/sdlc-harness", "govern my backlog",
-  "check my work items", "draft acceptance criteria", "review this issue", or asks
-  about work-item quality.
+description: |
+  Governs work item quality throughout the SDLC for a GitLab project. Onboards to the
+  team's workflow, applies best-practice templates, monitors work items, drafts acceptance
+  criteria, flags ambiguous descriptions, suggests dependency links, and proposes state
+  transitions. Use when the user asks to govern, audit, or improve their backlog or work
+  items on the local GitLab demo instance.
 ---
 
-# sdlc-harness
+# SDLC Harness Skill
 
-sdlc-harness puts a team of WatsonX AI agents inside the developer's existing workflow
-to govern work item quality throughout the entire SDLC, before problems reach the backlog.
+You are an SDLC governance agent. When invoked, follow this workflow.
 
 ## When this skill activates
 
@@ -98,6 +95,23 @@ When the user asks to govern issues, present these options:
 
 ---
 
+## Agents
+
+| ID | Agent | Concern |
+|---|---|---|
+| AC | Acceptance-criteria | Issues without Given-When-Then AC |
+| AM | Ambiguity detection | Issues with vague or contradictory descriptions |
+| DEP | Dependency suggestion | Issues that likely block or relate to each other |
+| ST | State-transition | Issues whose GitLab state is stale relative to activity |
+| TC *(P1)* | Test-coverage linkage | Issues with no linked test file or test-plan item |
+
+TC is disabled by default (seed data has no test files). To enable:
+1. Add at least one test file to `weather-app/` (e.g. `weather.test.js`).
+2. Set `"testGlob": "weather-app/**/*.test.*"` in `.sdlc-harness.json`.
+3. TC will be included in subsequent audit runs automatically.
+
+---
+
 ### Acceptance Criteria Agent (Task 20)
 
 **Module:** `bob-kit/skills/sdlc-harness/src/agents/ac-agent.ts`
@@ -114,7 +128,7 @@ When the user asks to govern issues, present these options:
 
 **AC detection rules (deterministic — no LLM required):**
 - Returns `null` if the description contains "Acceptance Criteria" (case-insensitive),
-  "Given … When … Then" on a single line, a line starting with "Given", or "## AC".
+  structured multi-line GWT (Given / When / Then each starting their own line), or "## AC".
 - Drafts a Given-When-Then skeleton from the issue title and description directly in
   `ac-agent.ts`. **Does NOT call the `work-item-format` MCP tool** — that tool
   integration is reserved for Phase 2 (Task 19) when the template standard is wired.
@@ -283,7 +297,31 @@ Reply with:
 **Only `apply` and `edit` call the GitLab writer adapter.** `skip` and `reject` do not
 modify any GitLab data.
 
-### Conflict detection
+### Conflict Detection
+
+A conflict arises when two agents produce suggestions that contradict each other on the same
+issue. The two most common cases:
+
+- DEP suggests issue A *blocks* issue B (implying A must finish first), while ST suggests
+  transitioning A to Done (implying it is already complete).
+- AM rewrites a description in a way that would invalidate AC drafted by AC in the same run.
+
+Before presenting the review, check for overlapping `issueIid` values across all agent
+findings. Conflicting findings are grouped and flagged:
+
+```
+⚡ CONFLICT — Issue #7 has suggestions from two agents that may contradict:
+
+  [ST] Proposed transition: Open → In Progress
+       (reason: MR !3 referencing this issue was opened 2h ago)
+
+  [DEP] Proposed link: #7 blocks #9
+       (reason: both issues describe the same auth token refresh logic)
+
+  → apply ST first / apply DEP first / apply both / skip both
+```
+
+Do not auto-resolve conflicts. The user decides.
 
 When multiple agents produce findings for the **same issue IID** in the same session,
 surface them one at a time in a numbered list before presenting each individually:
@@ -351,15 +389,37 @@ One JSON object is appended per **accepted**, **edited**, or **rejected** decisi
 - The file is append-only; existing entries are never modified.
 - The file is gitignored (`sdlc-harness-telemetry.jsonl`).
 
+### Telemetry
+
+Every apply / edit / reject outcome is appended to `sdlc-harness-telemetry.jsonl` in the
+repo root (append-only, never overwritten). The file is gitignored and contains no issue
+content — only metadata.
+
+```jsonc
+{
+  "ts": "2025-09-01T14:32:10Z",
+  "agent": "AC",
+  "issueIid": 12,
+  "action": "draft_ac",
+  "outcome": "accepted",   // "accepted" | "edited" | "rejected" | "failed"
+  "editedFields": []       // populated when outcome = "edited"
+}
+```
+
+The acceptance rate (`accepted / (accepted + rejected)`) is the primary trust metric for the demo.
+Note: `"failed"` outcomes (write attempted but adapter returned `written: false`) are excluded
+from both the numerator and denominator of all rate calculations.
+
 ### Acceptance-rate summary
 
 Call `computeAcceptanceRate(entries)` from `telemetry.ts` to get:
 
 ```
-Total:           N decisions logged
+Total:           N decisions logged (failed excluded)
 Accepted:        N  (N%)
 Edited:          N  (N%)
 Rejected:        N  (N%)
+Failed:          N  (write did not reach GitLab — excluded from rates)
 Acceptance rate: N%     (accepted / total)
 Approval rate:   N%     (accepted + edited) / total
 ```
@@ -409,5 +469,5 @@ bob-kit/skills/sdlc-harness/
 │       ├── telemetry.ts                  — Task 26: JSONL append, acceptance-rate
 │       └── gitlab-writer-adapter.ts      — adapter boundary for MCP write calls
 └── tests/
-    └── skill.test.ts                     — 37 tests covering Tasks 18–26
+    └── skill.test.ts                     — 60 tests covering Tasks 18–26
 ```

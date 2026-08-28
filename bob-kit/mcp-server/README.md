@@ -72,9 +72,9 @@ SDLC_SMOKE_LIVE=true npm run smoke
 
 ```bash
 # From the project root:
-bash mcp-server/install.sh
+bash bob-kit/mcp-server/install.sh
 # Or with an explicit path:
-bash mcp-server/install.sh /absolute/path/to/sdlc-harness
+bash bob-kit/mcp-server/install.sh /absolute/path/to/sdlc-harness
 ```
 
 ---

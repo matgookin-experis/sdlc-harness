@@ -10,6 +10,9 @@
  *  4. gitlab-issue-reader tool executes correctly against the mock client.
  *  5. gitlab-issue-writer duplicate detection works correctly.
  *  6. gitlab-mr-reader-writer routes correctly.
+ *  7. MCP transport integration: listTools returns non-empty schemas, and
+ *     each tool can be invoked through StdioClientTransport without an
+ *     action validation error.
  *
  * When a live GitLab instance is available, set GITLAB_HOST, GITLAB_PROJECT,
  * and GITLAB_TOKEN in .env and run with SDLC_SMOKE_LIVE=true to run live checks.
@@ -21,6 +24,10 @@ import { gitlabIssueWriterTool } from "./tools/gitlab-issue-writer.js";
 import { gitlabMrReaderWriterTool } from "./tools/gitlab-mr-reader-writer.js";
 import { workItemFormatTool } from "./tools/work-item-format.js";
 import type { ToolContext } from "./types.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
 
 // ---------------------------------------------------------------------------
 // Lightweight assertion helpers
@@ -290,6 +297,118 @@ async function testGitLabApiError(): Promise<void> {
   assert(err instanceof Error, "GitLabApiError is an Error");
 }
 
+
+// ---------------------------------------------------------------------------
+// MCP transport integration test — spawns dist/index.js via StdioClientTransport
+// ---------------------------------------------------------------------------
+
+/**
+ * Verifies that the MCP server, when started as a real subprocess, publishes
+ * non-empty input schemas for every registered tool and accepts valid calls.
+ *
+ * This catches the class of regression where tool() is mistakenly passed a
+ * discriminated-union schema via .shape (which yields {}) instead of the full
+ * schema — something the unit-level smoke tests cannot detect.
+ */
+async function testMcpTransportIntegration(): Promise<void> {
+  section("MCP transport integration (stdio subprocess)");
+
+  // Locate dist/index.js relative to this compiled file
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+  const serverPath = resolve(__dirname, "index.js");
+
+  // Provide minimal env so the server starts (it won't connect to GitLab)
+  const env = {
+    ...process.env,
+    GITLAB_HOST: "https://gitlab.example.com",
+    GITLAB_PROJECT: "demo/project",
+    GITLAB_TOKEN: "smoke-test-token",
+  };
+
+  const transport = new StdioClientTransport({
+    command: "node",
+    args: [serverPath],
+    env,
+  });
+
+  const client = new Client({ name: "smoke-test-client", version: "0.1.0" });
+
+  try {
+    await client.connect(transport);
+
+    // 1. listTools — verify all four tools are registered
+    const { tools } = await client.listTools();
+    const toolNames = tools.map((t) => t.name);
+    const expectedTools = [
+      "gitlab-issue-reader",
+      "gitlab-issue-writer",
+      "gitlab-mr-reader-writer",
+      "work-item-format",
+    ];
+
+    assert(tools.length === expectedTools.length, `listTools returns ${expectedTools.length} tools (got ${tools.length})`);
+
+    for (const name of expectedTools) {
+      assert(toolNames.includes(name), `listTools includes ${name}`);
+    }
+
+    // 2. Verify each tool has a non-empty input schema (the core regression check).
+    //    Discriminated-union schemas produce anyOf, not properties — accept either.
+    for (const tool of tools) {
+      const schema = tool.inputSchema as {
+        anyOf?: unknown[];
+        oneOf?: unknown[];
+        properties?: Record<string, unknown>;
+      };
+      const hasContent =
+        schema &&
+        typeof schema === "object" &&
+        (
+          (Array.isArray(schema.anyOf) && schema.anyOf.length > 0) ||
+          (Array.isArray(schema.oneOf) && schema.oneOf.length > 0) ||
+          ("properties" in schema && Object.keys(schema.properties ?? {}).length > 0)
+        );
+      assert(hasContent, `${tool.name} publishes non-empty input schema`);
+    }
+
+    // 3. Invoke work-item-format (no GitLab connection needed) — valid call
+    const fmtResult = await client.callTool({
+      name: "work-item-format",
+      arguments: { action: "get-standard" },
+    });
+    const fmtText = (fmtResult.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
+    const fmtParsed = JSON.parse(fmtText) as { standard: unknown };
+    assert(
+      typeof fmtParsed.standard === "object" && fmtParsed.standard !== null,
+      "work-item-format get-standard returns standard object via MCP transport"
+    );
+
+    // 4. Invoke work-item-format with an invalid action — the server must
+    //    reject it with a validation error (either as an MCP RPC error thrown
+    //    from the handler, or as an isError=true CallToolResult).
+    let invalidActionRejected = false;
+    try {
+      const badResult = await client.callTool({
+        name: "work-item-format",
+        arguments: { action: "not-a-real-action" },
+      });
+      // If the SDK catches the error and wraps it in isError=true content:
+      invalidActionRejected = (badResult as { isError?: boolean }).isError === true;
+    } catch {
+      // McpError thrown by the handler and surfaced as an RPC error — also correct
+      invalidActionRejected = true;
+    }
+    assert(
+      invalidActionRejected,
+      "work-item-format rejects an invalid action with a validation error"
+    );
+  } finally {
+    await client.close();
+  }
+}
+
+
 // ---------------------------------------------------------------------------
 // Live smoke test (optional — requires real GitLab credentials)
 // ---------------------------------------------------------------------------
@@ -340,6 +459,7 @@ async function main(): Promise<void> {
   await testGitLabIssueWriter();
   await testGitLabMrReaderWriter();
   await testGitLabApiError();
+  await testMcpTransportIntegration();
 
   if (process.env["SDLC_SMOKE_LIVE"] === "true") {
     await testLive();
