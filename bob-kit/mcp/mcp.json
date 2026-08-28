@@ -1,5 +1,30 @@
 {
-  "$comment": "MERGE this entry into Bob's global MCP config (Bob IDE -> Settings -> MCP -> 'Edit Global MCP'). Replace <YOUR_GITLAB_TOKEN> with a GitLab personal access token from http://localhost:8080/-/user_settings/personal_access_tokens",
+  "$comment": [
+    "MERGE this entry into Bob's global MCP config.",
+    "Find the real path via: Bob IDE → Settings → MCP → 'Edit Global MCP'.",
+    "Confirmed path on this machine: ~/.bob/settings/mcp_settings.json",
+    "",
+    "TRANSPORT: stdio — Bob spawns the Docker container for each session.",
+    "The container is ephemeral (--rm); no background process to manage.",
+    "",
+    "SCOPE: workspace-independent. This server connects to the demo GitLab",
+    "instance at http://localhost:8080 and is only meaningful when the",
+    "docker-compose stack in gitlab-local/ is running.",
+    "",
+    "SECRETS HANDLING: the env block below contains NAMES only — never values.",
+    "Replace <YOUR_GITLAB_TOKEN> with a GitLab PAT from:",
+    "  http://localhost:8080/-/user_settings/personal_access_tokens",
+    "Required scopes: api (read_api is sufficient for read-only use;",
+    "api is required for the issue-writer / state-transition tools).",
+    "The token value must never be committed; store it in the gitignored",
+    ".env file at the repo root and reference it from your shell profile,",
+    "or paste it directly into the IDE's MCP secrets panel if available.",
+    "",
+    "alwaysAllow: read-only tools only. Writer tools (mcp__gitlab-local__*",
+    "that modify issues or MRs) require per-call approval — this is",
+    "intentional; the sdlc-harness skill always gates writes on user",
+    "confirmation before calling them."
+  ],
   "mcpServers": {
     "gitlab-local": {
       "command": "docker",
@@ -14,6 +39,15 @@
         "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_GITLAB_TOKEN>",
         "GITLAB_API_URL": "http://localhost:8080/api/v4"
       },
+      "alwaysAllow": [
+        "list_issues",
+        "get_issue",
+        "list_merge_requests",
+        "get_merge_request",
+        "list_labels",
+        "list_projects",
+        "get_project"
+      ],
       "disabled": false
     }
   }
