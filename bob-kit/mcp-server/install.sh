@@ -15,10 +15,10 @@
 
 set -euo pipefail
 
-# Resolve project root (default: parent of this script)
+# Resolve project root (default: grandparent of this script — bob-kit/mcp-server/ → project root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${1:-$SCRIPT_DIR}"
-MCP_DIR="$PROJECT_ROOT/mcp-server"
+PROJECT_ROOT="${1:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+MCP_DIR="$PROJECT_ROOT/bob-kit/mcp-server"
 
 echo "sdlc-harness installer"
 echo "======================"

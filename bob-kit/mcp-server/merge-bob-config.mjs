@@ -92,7 +92,7 @@ function mergeMcpJson(absoluteProjectPath) {
 
   // Resolve paths
   const entry = JSON.parse(JSON.stringify(SDLC_SERVER_ENTRY));
-  const indexPath = join(absoluteProjectPath, "mcp-server", "dist", "index.js");
+  const indexPath = join(absoluteProjectPath, "bob-kit", "mcp-server", "dist", "index.js");
   const envPath = join(absoluteProjectPath, ".env");
 
   entry["sdlc-harness"].args[0] = indexPath;

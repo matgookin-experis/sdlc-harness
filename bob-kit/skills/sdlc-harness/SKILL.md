@@ -1,83 +1,36 @@
 ---
 name: sdlc-harness
-description: >
-  Use when the user wants to govern work item quality, monitor a project backlog,
-  onboard a project management tool (GitLab Issues, Jira, Azure DevOps), draft
-  missing acceptance criteria, flag ambiguous descriptions, suggest dependency links,
-  propose state transitions, or review agent suggestions for work items. Activate
-  any time the user says "sdlc-harness", "/sdlc-harness", "govern my backlog",
-  "check my work items", "draft acceptance criteria", "review this issue", or asks
-  about work-item quality.
+description: |
+  Governs work item quality throughout the SDLC for a GitLab project. Onboards to the
+  team's workflow, applies best-practice templates, monitors work items, drafts acceptance
+  criteria, flags ambiguous descriptions, suggests dependency links, and proposes state
+  transitions. Use when the user asks to govern, audit, or improve their backlog or work
+  items on the local GitLab demo instance.
 ---
 
-# sdlc-harness
+# SDLC Harness Skill
 
-sdlc-harness puts a team of WatsonX AI agents inside the developer's existing workflow
-to govern work item quality throughout the entire SDLC, before problems reach the backlog.
+You are an SDLC governance agent. When invoked, follow this workflow.
 
-## When this skill activates
-
-- The user wants to onboard a project management tool to sdlc-harness.
-- The user asks the skill to check, review, or improve one or more work items.
-- An agent has produced a suggestion and the user wants to review, approve, edit, or
-  reject it.
-- The user asks about backlog quality, acceptance criteria, ambiguity, dependencies,
-  state transitions, or test coverage linkage.
-
----
-
-## Scope
-
-This skill acts **only** on the project management project/group established
-during onboarding (Phase 1). It never reads or writes issues, merge requests,
-or labels in any other GitLab group or project on the same instance, even when
-scanning for dependency overlap or monitoring state. If the user wants to govern
-a different project, they must re-run onboarding to reconfigure scope — the skill
-does not infer or expand scope on its own.
-
----
-
-## Phase 1 — Onboarding (Task 18)
+## Step 1: Onboard (first run only)
 
 Check whether the project has already been onboarded by looking for a `.sdlc-harness.json`
 config in the repo root.
 
-- **Not onboarded:** Run the onboarding conversation below.
-- **Already onboarded:** Load the config and proceed to Phase 3.
+- **Not onboarded:** Run the onboarding conversation (Step 2).
+- **Already onboarded:** Load the config and proceed to Step 3.
 
-### Onboarding conversation
+## Step 2: Onboarding Conversation
 
 Ask the user:
-
 1. Which GitLab project should be governed? (default: `http://localhost:8080/sdlc-harness/weather-dashboard`)
-2. What work item types does the team use? (e.g. Story, Bug, Task, Epic)
+2. What work item types does the team use? (e.g. Story, Bug, Task)
 3. What are the workflow states and transition rules?
 4. Are there existing work item templates to follow?
 
 Save answers to `.sdlc-harness.json` in the repo root.
 
----
-
-## Phase 2 — Work Item Templates (Task 19)
-
-<!-- TODO Task 19: Industry best-practice templates for:
-     - User Story  (title convention, description structure, Given-When-Then AC)
-     - Bug         (steps to reproduce, expected vs actual, severity)
-     - Task        (definition of done, effort estimate placeholder)
-     - Epic        (goal, child story links, success metrics)
-     DELEGATE, DO NOT DUPLICATE: the canonical standard lives in the
-     `work-item-format` MCP tool (Task 13). This phase should call
-     that tool for title/description/AC structure rather than re-defining the
-     standard inline here.
--->
-
-_Templates not yet implemented — see Task 19. The standard itself lives in the
-`work-item-format` MCP tool; this phase wires the skill to call it, not
-re-author it._
-
----
-
-## Phase 3 — Governance Actions
+## Step 3: Governance Actions
 
 Offer the user a menu of governance actions:
 
@@ -89,76 +42,73 @@ Offer the user a menu of governance actions:
 - **Transition** — propose state transitions for issues that appear ready to move
 - **Template** — apply best-practice work item templates to selected issues
 
-### Acceptance Criteria Agent (Task 20)
-
-<!-- TODO Task 20: Detect issues lacking AC; draft AC using description + template as context. -->
-
-_Not yet implemented beyond Draft action above._
-
-### Ambiguity Detection Agent (Task 21)
-
-<!-- TODO Task 21: Flag vague language; propose concrete rewrites. -->
-
-_Not yet implemented._
-
-### Dependency Suggestion Agent (Task 22)
-
-<!-- TODO Task 22: Scan open issues for semantic overlap; propose relates-to / blocks links. -->
-
-_Not yet implemented beyond Link action above._
-
-### State Transition Agent (Task 23)
-
-<!-- TODO Task 23: Monitor issue state; propose next transition based on activity signals
-     (e.g. MR merged → suggest "In Review"). -->
-
-_Not yet implemented beyond Transition action above._
-
-### Test Coverage Linkage Agent (Task 24 — P1 stretch)
-
-<!-- TODO Task 24 (P1): Cross-reference issues with test files / test plan items;
-     flag uncovered work items. Build only after P0 agents and demo loop are proven. -->
-
-_Stretch goal — not yet implemented._
-
----
-
-## Phase 4 — Human Review Interface (Task 25)
+## Step 4: Review & Apply
 
 Present each proposed change to the user. Apply only on explicit approval.
 Never modify work items without user confirmation.
 
-<!-- TODO Task 25: Flesh out the full review interaction pattern:
-     - Show suggestion with context (issue title, current description, proposed change)
-     - Accept: apply the change via MCP tool call
-     - Edit: take the developer's revised text, apply it
-     - Reject: log the rejection to telemetry and discard
-     All review actions happen in natural language inside Bob — no context switch required.
--->
+---
+
+## Agents
+
+| ID | Agent | Concern |
+|---|---|---|
+| AC | Acceptance-criteria | Issues without Given-When-Then AC |
+| AM | Ambiguity detection | Issues with vague or contradictory descriptions |
+| DEP | Dependency suggestion | Issues that likely block or relate to each other |
+| ST | State-transition | Issues whose GitLab state is stale relative to activity |
+| TC *(P1)* | Test-coverage linkage | Issues with no linked test file or test-plan item |
+
+TC is disabled by default (seed data has no test files). To enable:
+1. Add at least one test file to `weather-app/` (e.g. `weather.test.js`).
+2. Set `"testGlob": "weather-app/**/*.test.*"` in `.sdlc-harness.json`.
+3. TC will be included in subsequent audit runs automatically.
 
 ---
 
-## Phase 5 — Suggestion Telemetry (Task 26)
+## Conflict Detection
 
-<!-- TODO Task 26: Log each agent proposal + outcome (accepted / edited / rejected) to a
-     flat file or GitLab comment thread. Keep it minimal — no dashboard — but ensure
-     an acceptance-rate number can be cited in the demo. -->
+A conflict arises when two agents produce suggestions that contradict each other on the same
+issue. The two most common cases:
 
-_Telemetry not yet implemented — see Task 26._
+- DEP suggests issue A *blocks* issue B (implying A must finish first), while ST suggests
+  transitioning A to Done (implying it is already complete).
+- AM rewrites a description in a way that would invalidate AC drafted by AC in the same run.
+
+Before presenting the review, check for overlapping `issueIid` values across all agent
+findings. Conflicting findings are grouped and flagged:
+
+```
+⚡ CONFLICT — Issue #7 has suggestions from two agents that may contradict:
+
+  [ST] Proposed transition: Open → In Progress
+       (reason: MR !3 referencing this issue was opened 2h ago)
+
+  [DEP] Proposed link: #7 blocks #9
+       (reason: both issues describe the same auth token refresh logic)
+
+  → apply ST first / apply DEP first / apply both / skip both
+```
+
+Do not auto-resolve conflicts. The user decides.
 
 ---
 
-## MCP Tools available to this skill
+## Telemetry
 
-The following MCP tools are registered by the sdlc-harness GitLab MCP server (Section 2A).
-Use them when calling GitLab on the user's behalf:
+Every apply / edit / reject outcome is appended to `sdlc-harness-telemetry.jsonl` in the
+repo root (append-only, never overwritten). The file is gitignored and contains no issue
+content — only metadata.
 
-| Tool | Purpose |
-|------|---------|
-| `gitlab-issue-reader` | Read issues, labels, and current state |
-| `gitlab-issue-writer` | Create / update issues with duplicate detection |
-| `gitlab-mr-reader`    | Read merge requests (used by state-transition agent) |
-| `gitlab-mr-writer`    | Update MR descriptions or labels |
-| `work-item-format`    | Canonical formatting standard for titles, descriptions, AC |
+```jsonc
+{
+  "ts": "2025-09-01T14:32:10Z",
+  "agent": "AC",
+  "issueIid": 12,
+  "action": "draft_ac",
+  "outcome": "accepted",   // "accepted" | "edited" | "rejected"
+  "editedFields": []       // populated when outcome = "edited"
+}
+```
 
-_Tools are not available until the MCP server (Tasks 7–16) is running and registered (Task 29)._
+The acceptance rate (`accepted / (accepted + rejected)`) is the primary trust metric for the demo.
