@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 usage() {
-  echo "Usage: $0 {start|stop|restart|seed|password|logs|status}"
+  echo "Usage: $0 {start|stop|restart|seed|seed-issues|password|logs|status}"
   exit 1
 }
 
@@ -26,6 +26,10 @@ case "${1:-}" in
   seed)
     echo "Running demo seed..."
     bash "$SCRIPT_DIR/seed.sh"
+    ;;
+  seed-issues)
+    echo "Seeding demo issues..."
+    bash "$SCRIPT_DIR/seed-issues.sh"
     ;;
   password)
     echo "Initial root password:"

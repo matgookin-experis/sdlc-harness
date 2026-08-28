@@ -25,6 +25,9 @@ docker compose up -d
 
 # 4. Seed demo data (run once after first boot)
 ./manage.sh seed
+
+# 5. Seed intentionally-incomplete demo issues for agent demo
+./manage.sh seed-issues
 ```
 
 Then open **http://localhost:8080** (GitLab) and **http://localhost:8081** (demo site).
@@ -58,15 +61,16 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 
 ## Helper Scripts
 
-| Command                  | Description                             |
-|--------------------------|-----------------------------------------|
-| `./smoke.sh`             | Validate full stack health (exit 0 = OK)|
-| `./manage.sh start`      | Start the stack                         |
-| `./manage.sh stop`       | Stop the stack                          |
-| `./manage.sh restart`    | Restart the stack                       |
-| `./manage.sh seed`       | Seed demo users, group, and project     |
-| `./manage.sh logs`       | Tail container logs                     |
-| `./manage.sh status`     | Show container health                   |
+| Command                       | Description                                           |
+|-------------------------------|-------------------------------------------------------|
+| `./smoke.sh`                  | Validate full stack health (exit 0 = OK)              |
+| `./manage.sh start`           | Start the stack                                       |
+| `./manage.sh stop`            | Stop the stack                                        |
+| `./manage.sh restart`         | Restart the stack                                     |
+| `./manage.sh seed`            | Seed demo users, group, and project                   |
+| `./manage.sh seed-issues`     | Seed 12 intentionally-incomplete issues for agent demo|
+| `./manage.sh logs`            | Tail container logs                                   |
+| `./manage.sh status`          | Show container health                                 |
 
 The seed script is **idempotent** — safe to run multiple times, skips anything that already exists.
 
