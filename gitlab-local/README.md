@@ -1,6 +1,6 @@
 # GitLab Local
 
-Runs a self-hosted GitLab CE instance locally via Docker with a reproducible demo environment.
+Runs a self-hosted GitLab CE instance and a static demo site locally via Docker, with a reproducible demo environment.
 
 ## Requirements
 
@@ -13,23 +13,31 @@ Runs a self-hosted GitLab CE instance locally via Docker with a reproducible dem
 ```bash
 cd gitlab-local
 
-# 1. Start GitLab (first boot takes 3–5 minutes)
+# 1. Create your local credentials file (gitignored — never committed)
+cp .env.example .env
+#    Edit .env and set GITLAB_ROOT_PASSWORD to a strong password
+
+# 2. Start the stack (first boot takes 3–5 minutes)
 docker compose up -d
 
-# 2. Seed demo data (run once after first boot)
+# 3. Verify the stack is healthy
+./smoke.sh
+
+# 4. Seed demo data (run once after first boot)
 ./manage.sh seed
 ```
 
-Then open **http://localhost:8080**.
+Then open **http://localhost:8080** (GitLab) and **http://localhost:8081** (demo site).
 
 ## Credentials
 
-All logins are consistent across every fresh install — no random passwords.
+Credentials come from your local `.env` file — set `GITLAB_ROOT_PASSWORD` there.
+The same password is used for both the `root` admin and the `demo` user.
 
-| Account    | Username          | Password          | Role      |
-|------------|-------------------|-------------------|-----------|
-| Admin      | `root`            | `xK9!mPq2vL#8rTw` | Owner     |
-| Demo user  | `demo`            | `xK9!mPq2vL#8rTw` | Developer |
+| Account    | Username | Role      |
+|------------|----------|-----------|
+| Admin      | `root`   | Owner     |
+| Demo user  | `demo`   | Developer |
 
 ## Demo Project
 
@@ -52,9 +60,10 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 
 | Command                  | Description                             |
 |--------------------------|-----------------------------------------|
-| `./manage.sh start`      | Start GitLab                            |
-| `./manage.sh stop`       | Stop GitLab                             |
-| `./manage.sh restart`    | Restart GitLab                          |
+| `./smoke.sh`             | Validate full stack health (exit 0 = OK)|
+| `./manage.sh start`      | Start the stack                         |
+| `./manage.sh stop`       | Stop the stack                          |
+| `./manage.sh restart`    | Restart the stack                       |
 | `./manage.sh seed`       | Seed demo users, group, and project     |
 | `./manage.sh logs`       | Tail container logs                     |
 | `./manage.sh status`     | Show container health                   |
@@ -66,6 +75,7 @@ The seed script is **idempotent** — safe to run multiple times, skips anything
 | Port | Purpose                              |
 |------|--------------------------------------|
 | 8080 | GitLab web UI / API (host → port 80) |
+| 8081 | Demo site — weather app (nginx)      |
 | 2222 | Git over SSH                         |
 
 SSH remote URL format:

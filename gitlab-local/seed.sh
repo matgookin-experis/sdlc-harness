@@ -3,11 +3,27 @@
 # Creates a demo group, demo user, and the Weather Dashboard demo project
 # sourced from the sdlc-harness dev branch.
 # Safe to run multiple times — skips anything that already exists.
+#
+# Reads GITLAB_ROOT_PASSWORD from the environment or from .env in the
+# same directory as this script. Never falls back to a hardcoded value.
 set -euo pipefail
 
+# Load .env if present and GITLAB_ROOT_PASSWORD is not already set
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "${GITLAB_ROOT_PASSWORD:-}" ] && [ -f "$SCRIPT_DIR/.env" ]; then
+  # shellcheck disable=SC1091
+  set -a; source "$SCRIPT_DIR/.env"; set +a
+fi
+
+if [ -z "${GITLAB_ROOT_PASSWORD:-}" ]; then
+  echo "ERROR: GITLAB_ROOT_PASSWORD is not set."
+  echo "  Copy gitlab-local/.env.example to gitlab-local/.env and set the variable."
+  exit 1
+fi
+
 GITLAB_URL="http://localhost:8080"
-ROOT_PASSWORD="xK9!mPq2vL#8rTw"
-DEMO_PASSWORD="xK9!mPq2vL#8rTw"
+ROOT_PASSWORD="$GITLAB_ROOT_PASSWORD"
+DEMO_PASSWORD="$GITLAB_ROOT_PASSWORD"
 
 # ── Wait for GitLab to be ready ──────────────────────────────────────────────
 echo "Waiting for GitLab to be ready..."
