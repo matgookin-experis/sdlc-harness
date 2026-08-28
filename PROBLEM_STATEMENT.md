@@ -1,0 +1,23 @@
+# Problem Statement & Solution
+
+## The Problem
+
+Software teams adopt SDLC processes, but the discipline required to maintain them consistently breaks down in practice. The culprit is friction. Work items accumulate across sprints with missing acceptance criteria, broken dependency links, and descriptions that mean different things to different contributors. Reporting becomes unreliable, traceability gaps create audit risk, and handoffs require costly manual reconciliation.
+
+Existing tools like Jira or Azure DevOps can enforce structural rules such as required fields and blocked transitions, but they cannot reason about the quality of content. A field can be filled in and still be wrong. No current toolchain proactively closes that gap.
+
+## The Solution: sdlc-harness
+
+sdlc-harness is a Bob skill that puts a team of WatsonX AI agents inside the developer's existing workflow to govern work item quality throughout the entire SDLC, before problems reach the backlog.
+
+Target users are software development teams of any size who use a project management tool (Jira, Azure DevOps, GitHub Projects) and want consistent, traceable work items without adding overhead.
+
+A developer or project lead starts a guided onboarding conversation with the sdlc-harness skill inside Bob. In minutes, with no admin configuration or pipeline setup, the skill learns the team's project management tool, work item types, workflow states, and transition rules. Industry best-practice templates are applied as a baseline. From that point, WatsonX agents monitor the project continuously, drafting missing acceptance criteria, flagging ambiguous descriptions, suggesting dependency links, verifying test coverage relationships, and proposing state transitions before a human would notice the gap. Developers review, approve, or override suggestions through natural language inside Bob, without switching context.
+
+## Why It Is New
+
+Most governance tools are reactive. They flag a missing field after a developer has already committed a half-formed work item. sdlc-harness works the other way: agents act first, proposing well-formed work items that conform to the team's own templates, so the developer's job is reviewing good work rather than doing rote work. Onboarding takes minutes with no DevOps setup, removing the barrier that causes most teams to skip governance tooling entirely.
+
+## Measuring Success
+
+Success is visible in three places. First, backlog quality: fewer work items missing acceptance criteria, fewer vague descriptions reaching active development, fewer broken dependency links surfacing during audits or handoffs, and fewer stories or bugs transitioning to Done without a corresponding test link. Second, trust: if developers accept more agent suggestions over time rather than editing or rejecting them, the system is learning team conventions and earning its place. If the acceptance rate stagnates, the agents are adding noise instead of removing it. Third, time: how much less of each sprint do developers and product managers spend manually cleaning up work items? How quickly can a team produce a traceable, audit-ready picture of a release? Those are the exact costs named above, and they should be shrinking sprint over sprint.
