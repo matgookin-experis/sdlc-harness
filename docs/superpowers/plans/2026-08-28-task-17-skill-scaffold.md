@@ -61,8 +61,9 @@ description: >
   onboard a project management tool (GitLab Issues, Jira, Azure DevOps), draft
   missing acceptance criteria, flag ambiguous descriptions, suggest dependency links,
   propose state transitions, or review agent suggestions for work items. Activate
-  any time the user says "sdlc-harness", "govern my backlog", "check my work items",
-  "draft acceptance criteria", "review this issue", or asks about work-item quality.
+  any time the user says "sdlc-harness", "/sdlc-harness", "govern my backlog",
+  "check my work items", "draft acceptance criteria", "review this issue", or asks
+  about work-item quality.
 ---
 
 # sdlc-harness
@@ -78,6 +79,17 @@ to govern work item quality throughout the entire SDLC, before problems reach th
   reject it.
 - The user asks about backlog quality, acceptance criteria, ambiguity, dependencies,
   state transitions, or test coverage linkage.
+
+---
+
+## Scope
+
+This skill acts **only** on the project management project/group established
+during onboarding (Phase 1). It never reads or writes issues, merge requests,
+or labels in any other GitLab group or project on the same instance, even when
+scanning for dependency overlap (Task 22) or monitoring state (Task 23). If the
+user wants to govern a different project, they must re-run onboarding to
+reconfigure scope — the skill does not infer or expand scope on its own.
 
 ---
 
@@ -104,9 +116,16 @@ _Onboarding flow not yet implemented — see Task 18._
      - Task        (definition of done, effort estimate placeholder)
      - Epic        (goal, child story links, success metrics)
      The skill applies these templates when creating or reviewing work items.
+     DELEGATE, DO NOT DUPLICATE: the canonical standard already lives in the
+     `work-item-format` MCP tool (Section 2A, Task 13). This phase should call
+     that tool for title/description/AC structure rather than re-defining the
+     standard inline here — keep the skill and the tool as a single source of
+     truth.
 -->
 
-_Templates not yet implemented — see Task 19._
+_Templates not yet implemented — see Task 19. The standard itself lives in the
+`work-item-format` MCP tool; this phase wires the skill to call it, not
+re-author it._
 
 ---
 
@@ -214,7 +233,7 @@ No automated script needed — this is a one-time visual check.
 ```powershell
 git add .bob/skills/sdlc-harness/SKILL.md
 git add docs/superpowers/plans/2026-08-28-task-17-skill-scaffold.md
-git commit -m "feat(task-17): scaffold sdlc-harness Bob skill SKILL.md
+git commit -m "Scaffold sdlc-harness Bob skill SKILL.md
 
 - Creates .bob/skills/sdlc-harness/SKILL.md with correct frontmatter
   (name, multi-line description with concrete trigger phrases)
@@ -237,9 +256,11 @@ git commit -m "feat(task-17): scaffold sdlc-harness Bob skill SKILL.md
 | `SKILL.md` file created | ✅ Task 1, Step 2 |
 | `name` frontmatter field | ✅ `name: sdlc-harness` |
 | `description` frontmatter field | ✅ multi-line trigger phrase block |
-| Trigger phrases | ✅ "sdlc-harness", "govern my backlog", "check my work items", "draft acceptance criteria", "review this issue" |
+| Trigger phrases | ✅ "sdlc-harness", "/sdlc-harness", "govern my backlog", "check my work items", "draft acceptance criteria", "review this issue" |
 | Bob skill authoring conventions (name regex, dir structure) | ✅ validated in Step 4 |
 | Workspace scope (`.bob/skills/`) | ✅ |
+| Project/data scope boundary (prevents cross-project drift once agents run) | ✅ `## Scope` section |
+| Phase 2 delegates to `work-item-format` tool instead of duplicating the standard | ✅ TODO Task 19 comment |
 
 ### Placeholder scan
 
