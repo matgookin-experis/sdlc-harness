@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weather Dashboard – SDLC Harness Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Skip link for keyboard/screen-reader users -->
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+
+  <div class="page-wrapper">
+
+    <!-- ===== Site Header ===== -->
+    <header class="site-header" role="banner">
+      <div class="header-inner">
+        <div class="header-titles">
+          <h1 class="app-title">Weather Dashboard</h1>
+          <p class="app-subtitle">A simple SDLC Harness demo application</p>
+        </div>
+
+        <!-- Light/Dark theme toggle -->
+        <button
+          id="theme-toggle"
+          class="theme-toggle"
+          type="button"
+          aria-label="Switch to dark mode"
+          aria-pressed="false"
+        >
+          <span class="toggle-icon" aria-hidden="true">🌙</span>
+          <span class="toggle-label">Dark</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ===== Main Content ===== -->
+    <main id="main-content" class="main-content">
+
+      <!-- Search section -->
+      <section class="search-section" aria-label="City search">
+        <form id="search-form" class="search-form" novalidate>
+          <label for="city-input" class="visually-hidden">Enter city name</label>
+          <input
+            id="city-input"
+            class="city-input"
+            type="text"
+            placeholder="Enter a city name…"
+            autocomplete="off"
+            aria-describedby="validation-message"
+            aria-required="true"
+          />
+          <button id="search-btn" class="search-btn" type="submit">Search</button>
+        </form>
+        <!-- Validation / error feedback -->
+        <p id="validation-message" class="validation-message" role="alert" aria-live="polite"></p>
+      </section>
+
+      <!-- Weather card -->
+      <section class="card-section" aria-label="Weather results">
+
+        <!-- Loading overlay – shown briefly while "fetching" data -->
+        <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite" hidden>
+          <div class="spinner" aria-hidden="true"></div>
+          <span>Fetching weather data…</span>
+        </div>
+
+        <!-- Weather data card -->
+        <article id="weather-card" class="weather-card" aria-label="Weather information">
+          <div class="card-header">
+            <h2 id="card-city" class="card-city">—</h2>
+            <p id="card-updated" class="card-updated">Last updated: —</p>
+          </div>
+          <div class="card-body">
+            <div class="card-temp-block">
+              <span id="card-temp" class="card-temp">—</span>
+              <span class="card-unit">°F</span>
+            </div>
+            <p id="card-condition" class="card-condition">—</p>
+          </div>
+          <dl class="card-details">
+            <div class="card-detail-item">
+              <dt>Humidity</dt>
+              <dd id="card-humidity">—</dd>
+            </div>
+            <div class="card-detail-item">
+              <dt>Wind Speed</dt>
+              <dd id="card-wind">—</dd>
+            </div>
+          </dl>
+        </article>
+
+      </section>
+    </main>
+
+    <!-- ===== Footer ===== -->
+    <footer class="site-footer" role="contentinfo">
+      <p>SDLC Harness · IBM Hackathon Demo</p>
+    </footer>
+
+  </div><!-- /.page-wrapper -->
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,454 @@
+/* ===================================================================
+   styles.css – Weather Dashboard (SDLC Harness Demo)
+   All colours, spacing, and typography are controlled via CSS custom
+   properties so that the dark-mode override only needs a single block.
+   =================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* 1. CSS Custom Properties (design tokens)                            */
+/* ------------------------------------------------------------------ */
+:root {
+  /* Colours – light mode */
+  --color-bg:           #f0f4f8;
+  --color-surface:      #ffffff;
+  --color-surface-alt:  #e8edf2;
+  --color-border:       #d0d7de;
+  --color-text:         #1c2a3a;
+  --color-text-muted:   #4a5a6b;
+  --color-accent:       #1a6dbf;
+  --color-accent-hover: #145596;
+  --color-error:        #c0392b;
+  --color-error-bg:     #fdf0ee;
+  --color-spinner:      #1a6dbf;
+
+  /* Spacing */
+  --space-xs:   0.25rem;
+  --space-sm:   0.5rem;
+  --space-md:   1rem;
+  --space-lg:   1.5rem;
+  --space-xl:   2rem;
+  --space-2xl:  3rem;
+
+  /* Typography */
+  --font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font-size-base: 1rem;
+  --font-size-sm:   0.875rem;
+  --font-size-lg:   1.25rem;
+  --font-size-xl:   1.75rem;
+  --font-size-2xl:  2.5rem;
+  --line-height:    1.6;
+
+  /* Misc */
+  --radius:         0.5rem;
+  --radius-lg:      0.75rem;
+  --shadow:         0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg:      0 4px 20px rgba(0,0,0,0.12);
+  --transition:     0.2s ease;
+  --max-width:      720px;
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Dark mode token overrides                                        */
+/*    Applied via the `data-theme="dark"` attribute on <body>,        */
+/*    which is toggled by app.js and persisted in localStorage.       */
+/* ------------------------------------------------------------------ */
+[data-theme="dark"] {
+  --color-bg:           #0d1117;
+  --color-surface:      #161b22;
+  --color-surface-alt:  #21262d;
+  --color-border:       #30363d;
+  --color-text:         #e6edf3;
+  --color-text-muted:   #8b949e;
+  --color-accent:       #58a6ff;
+  --color-accent-hover: #79b8ff;
+  --color-error:        #f85149;
+  --color-error-bg:     #1f1116;
+  --color-spinner:      #58a6ff;
+  --shadow:             0 2px 8px rgba(0,0,0,0.4);
+  --shadow-lg:          0 4px 20px rgba(0,0,0,0.6);
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Base / Reset                                                     */
+/* ------------------------------------------------------------------ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  transition: background-color var(--transition), color var(--transition);
+  min-height: 100vh;
+}
+
+/* Visible focus style – meets WCAG 2.4.11 */
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Utility: visually hidden but accessible to screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: var(--space-md);
+  background: var(--color-accent);
+  color: #fff;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius);
+  font-weight: 600;
+  text-decoration: none;
+  z-index: 9999;
+}
+.skip-link:focus {
+  top: var(--space-sm);
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. Page wrapper                                                     */
+/* ------------------------------------------------------------------ */
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. Header                                                           */
+/* ------------------------------------------------------------------ */
+.site-header {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.app-title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  white-space: nowrap;
+}
+.theme-toggle:hover {
+  background: var(--color-border);
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. Main content                                                     */
+/* ------------------------------------------------------------------ */
+.main-content {
+  flex: 1;
+  max-width: var(--max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. Search section                                                   */
+/* ------------------------------------------------------------------ */
+.search-form {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.city-input {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-base);
+  font-family: var(--font-family);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  transition: border-color var(--transition);
+}
+.city-input::placeholder {
+  color: var(--color-text-muted);
+}
+.city-input:focus {
+  border-color: var(--color-accent);
+}
+/* Validation error state – toggled by app.js */
+.city-input.is-invalid {
+  border-color: var(--color-error);
+  background: var(--color-error-bg);
+}
+
+.search-btn {
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-base);
+  font-family: var(--font-family);
+  font-weight: 600;
+  background: var(--color-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+.search-btn:hover {
+  background: var(--color-accent-hover);
+}
+.search-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Validation message */
+.validation-message {
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+  min-height: 1.2em; /* reserve space so layout doesn't jump */
+}
+
+/* ------------------------------------------------------------------ */
+/* 8. Card section & loading overlay                                   */
+/* ------------------------------------------------------------------ */
+.card-section {
+  position: relative;
+}
+
+/* Loading overlay – briefly shown over the card when searching.
+   Use :not([hidden]) to set display:flex only when active, so the
+   CSS rule never overrides the HTML `hidden` attribute (which sets
+   display:none). Without this, display:flex wins and the spinner
+   stays visible even when hidden=true. */
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.75);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  z-index: 10;
+}
+.loading-overlay:not([hidden]) {
+  display: flex;
+}
+[data-theme="dark"] .loading-overlay:not([hidden]) {
+  background: rgba(13,17,23,0.75);
+}
+
+/* CSS spinner */
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-spinner);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------------ */
+/* 9. Weather card                                                     */
+/* ------------------------------------------------------------------ */
+.weather-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.card-city {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.card-updated {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.card-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.card-temp-block {
+  display: flex;
+  align-items: flex-start;
+}
+
+.card-temp {
+  font-size: 4rem;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--color-accent);
+}
+
+.card-unit {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  margin-top: var(--space-sm);
+}
+
+.card-condition {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Detail pairs (humidity, wind) */
+.card-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+  background: var(--color-surface-alt);
+  border-radius: var(--radius);
+  padding: var(--space-md) var(--space-lg);
+}
+
+.card-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.card-detail-item dt {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.card-detail-item dd {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------------ */
+/* 10. Footer                                                          */
+/* ------------------------------------------------------------------ */
+.site-footer {
+  text-align: center;
+  padding: var(--space-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+/* ------------------------------------------------------------------ */
+/* 11. Responsive – mobile breakpoint                                  */
+/* ------------------------------------------------------------------ */
+@media (max-width: 600px) {
+  .header-inner {
+    padding: var(--space-md);
+    flex-wrap: wrap;
+  }
+
+  .app-title {
+    font-size: var(--font-size-lg);
+  }
+
+  .main-content {
+    padding: var(--space-lg) var(--space-md);
+  }
+
+  .search-form {
+    flex-direction: column;
+  }
+
+  .search-btn {
+    width: 100%;
+  }
+
+  .card-city {
+    font-size: var(--font-size-xl);
+  }
+
+  .card-temp {
+    font-size: 3rem;
+  }
+
+  .card-details {
+    grid-template-columns: 1fr;
+  }
+}
