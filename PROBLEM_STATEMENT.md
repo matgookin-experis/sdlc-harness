@@ -12,7 +12,7 @@ sdlc-harness is a Bob skill that puts a team of WatsonX AI agents inside the dev
 
 Target users are software development teams of any size who use a project management tool (Jira, Azure DevOps, GitHub Projects) and want consistent, traceable work items without adding overhead.
 
-A developer or project lead starts a guided onboarding conversation with the sdlc-harness skill inside Bob. In minutes, with no admin configuration or pipeline setup, the skill learns the team's project management tool, work item types, workflow states, and transition rules. Industry best-practice templates are applied as a baseline. From that point, WatsonX agents monitor the project continuously, drafting missing acceptance criteria, flagging ambiguous descriptions, suggesting dependency links, and proposing state transitions before a human would notice the gap. Developers review, approve, or override suggestions through natural language inside Bob, without switching context.
+A developer or project lead starts a guided onboarding conversation with the sdlc-harness skill inside Bob. In minutes, with no admin configuration or pipeline setup, the skill learns the team's project management tool, work item types, workflow states, and transition rules. Industry best-practice templates are applied as a baseline. From that point, WatsonX agents monitor the project continuously, drafting missing acceptance criteria, flagging ambiguous descriptions, suggesting dependency links, verifying test coverage relationships, and proposing state transitions before a human would notice the gap. Developers review, approve, or override suggestions through natural language inside Bob, without switching context.
 
 ## Why It Is New
 
