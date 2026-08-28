@@ -1,0 +1,20 @@
+{
+  "$comment": "MERGE this entry into Bob's global MCP config (Bob IDE -> Settings -> MCP -> 'Edit Global MCP'). Replace <YOUR_GITLAB_TOKEN> with a GitLab personal access token from http://localhost:8080/-/user_settings/personal_access_tokens",
+  "mcpServers": {
+    "gitlab-local": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "--network", "host",
+        "-e", "GITLAB_PERSONAL_ACCESS_TOKEN",
+        "-e", "GITLAB_API_URL",
+        "mcp/gitlab"
+      ],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "<YOUR_GITLAB_TOKEN>",
+        "GITLAB_API_URL": "http://localhost:8080/api/v4"
+      },
+      "disabled": false
+    }
+  }
+}
