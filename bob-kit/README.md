@@ -18,8 +18,7 @@ bob-kit/
 │       ├── SKILL.md            — The sdlc-harness Bob skill
 │       └── tests/
 │           └── skill.test.ts   — Unit tests (onboarding, agents, review, telemetry)
-├── custom_modes.yaml           — Custom mode definition (merge into ~/.bob/settings/custom_modes.yaml)
-└── AGENT_ORCHESTRATION.md     — Conflict detection spec, telemetry format, P1 TC agent setup
+└── custom_modes.yaml           — Custom mode definition (merge into ~/.bob/settings/custom_modes.yaml)
 ```
 
 ## How to Install
@@ -51,5 +50,5 @@ This installs dependencies, builds the TypeScript MCP server, merges Bob config,
 |---|---|
 | [`custom_modes.yaml`](./custom_modes.yaml) | `🔧 SDLC Harness` mode — role definition, tool groups, skill/model hints |
 | [`mcp-server/`](./mcp-server/) | Custom Node.js MCP server — GitLab issue/MR tools, work-item-format validator |
-| [`AGENT_ORCHESTRATION.md`](./AGENT_ORCHESTRATION.md) | Conflict detection spec, telemetry JSONL format, P1 TC agent enablement |
+| [`skills/sdlc-harness/SKILL.md`](./skills/sdlc-harness/SKILL.md) | Full skill spec — agents, conflict detection, telemetry format, TC enablement |
 | [`skills/sdlc-harness/tests/skill.test.ts`](./skills/sdlc-harness/tests/skill.test.ts) | Jest tests covering onboarding, each agent's happy path, and the override/rejection path |
