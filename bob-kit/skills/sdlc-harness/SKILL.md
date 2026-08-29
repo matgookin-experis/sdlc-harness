@@ -484,5 +484,5 @@ bob-kit/skills/sdlc-harness/
 │       ├── telemetry.ts                  — Task 26: JSONL append, acceptance-rate
 │       └── gitlab-writer-adapter.ts      — adapter boundary for MCP write calls
 └── tests/
-    └── skill.test.ts                     — 60 tests covering Tasks 18–26
+    └── skill.test.ts                     — 76 tests covering Tasks 18–26
 ```
