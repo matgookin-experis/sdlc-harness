@@ -33,12 +33,19 @@ This installs dependencies, builds the TypeScript MCP server, merges Bob config,
 
 ### Option B — Manual
 
-1. **MCP server** — build and register:
+1. **MCP server** — build and register, run from the **repository root** throughout:
    ```bash
-   cd bob-kit/mcp-server && npm install && npm run build
+   (cd bob-kit/mcp-server && npm install && npm run build)
+   node bob-kit/mcp-server/merge-bob-config.mjs
    ```
-   Then merge the server into `~/.bob/settings/mcp.json` via
-   `node bob-kit/mcp-server/merge-bob-config.mjs`.
+   The build step is wrapped in a subshell `(...)` deliberately so it doesn't leave your
+   shell sitting in `bob-kit/mcp-server/`. That matters because `merge-bob-config.mjs`
+   defaults the project root to whatever directory you run it from when no path argument
+   is given — running it while still `cd`'d into `bob-kit/mcp-server/` (e.g. without the
+   subshell above) merges an `SDLC_ENV_FILE` pointer at `bob-kit/mcp-server/.env` instead
+   of the repository root `.env`, which is not what Bob's spawned MCP server reads.
+   `install.sh` avoids this entirely by always passing an explicit, absolute project-root
+   path; the manual path only avoids it by being run from the repository root as shown.
 2. **Rules** — copy files from `rules/` into `~/.bob/rules/`
 3. **Skills** — copy the `sdlc-harness/` folder from `skills/` into `~/.bob/skills/`
 4. **Modes** — merge `custom_modes.yaml` into `~/.bob/settings/custom_modes.yaml`
