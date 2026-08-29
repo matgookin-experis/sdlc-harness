@@ -38,7 +38,10 @@ services:
     container_name: demo-site
     restart: unless-stopped
     ports:
-      - '8081:80'
+      # Overridable because 8081 is a common collision on macOS — Docker
+      # Desktop's own helper process binds it on some installs. Set
+      # DEMO_SITE_PORT in .env if this port is taken.
+      - '${DEMO_SITE_PORT:-8081}:80'
     volumes:
       - ../weather-app:/usr/share/nginx/html:ro
 
