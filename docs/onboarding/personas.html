@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persona &amp; Permission Guide — sdlc-harness</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="../index.html">sdlc-harness docs</a>
+    <a href="../problem-statement.html">Problem Statement</a>
+    <a href="../bob-usage.html">Bob Usage</a>
+    <a href="../security.html">Security</a>
+    <a href="runbook.html">Onboarding</a>
+    <a href="../demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>Persona &amp; Permission Guide</h1>
+  <p><span class="tag">Task 35 — P1</span></p>
+  <div id="toc"></div>
+
+  <p>Documents the two demo personas used during SDLC Harness demonstrations, with the
+  exact GitLab roles and Bob permissions each one requires.</p>
+
+  <hr>
+
+  <h2>Overview</h2>
+  <p>The demo uses two personas to show that sdlc-harness governs work-item quality for
+  individual contributors and project leads without needing elevated GitLab access.</p>
+  <table>
+    <thead><tr><th>Persona</th><th>GitLab account</th><th>GitLab role</th><th>Bob mode</th></tr></thead>
+    <tbody>
+      <tr><td>Developer</td><td><code>demo</code></td><td>Developer</td><td><code>🔧 SDLC Harness</code></td></tr>
+      <tr><td>Project Lead</td><td><code>root</code></td><td>Owner</td><td><code>🔧 SDLC Harness</code></td></tr>
+    </tbody>
+  </table>
+  <p>Both personas use the same Bob mode and the same skill. The difference is in what
+  they can write back to GitLab: the Developer persona is the primary demo persona; the
+  Project Lead persona is used to show that the same tool works at a higher privilege
+  level (e.g. bulk-closing stale issues, modifying milestone assignments).</p>
+
+  <hr>
+
+  <h2>Persona 1 — Developer</h2>
+
+  <h3>Profile</h3>
+  <p>A mid-level software engineer working on the Weather Dashboard project. They use
+  Bob throughout their development workflow and rely on sdlc-harness to flag quality
+  problems before work items reach a sprint.</p>
+
+  <h3>GitLab role</h3>
+  <p><code>Developer</code>, the minimum role required for the MCP tools to
+  function.</p>
+  <table>
+    <thead><tr><th>Capability</th><th>Allowed?</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>Read all issues</td><td>✅</td><td>Developer has read access to the project</td></tr>
+      <tr><td>Create issues</td><td>✅</td><td>Developer can create issues</td></tr>
+      <tr><td>Update issue description / labels</td><td>✅</td><td>Developer can edit issues they are assigned to; Reporter cannot</td></tr>
+      <tr><td>Close issues</td><td>✅</td><td>Developer can close issues</td></tr>
+      <tr><td>Create merge requests</td><td>✅</td><td>Developer can create MRs from branches</td></tr>
+      <tr><td>Add comments / notes</td><td>✅</td><td>Developer can comment</td></tr>
+      <tr><td>Manage labels (create new)</td><td>❌</td><td>Requires Maintainer, not needed for the demo</td></tr>
+      <tr><td>Configure milestones</td><td>❌</td><td>Requires Maintainer</td></tr>
+    </tbody>
+  </table>
+  <p>The <code>demo</code> user is assigned the Developer role in the
+  <code>sdlc-harness</code> group by <code>seed.sh</code>.</p>
+
+  <h3>Bob permissions</h3>
+  <p>The <code>🔧 SDLC Harness</code> mode gives this persona access to:</p>
+  <table>
+    <thead><tr><th>Group</th><th>What it enables</th></tr></thead>
+    <tbody>
+      <tr><td><code>read</code></td><td>Read files in the workspace (loads <code>.sdlc-harness.json</code>, reads telemetry)</td></tr>
+      <tr><td><code>edit</code></td><td>Write files in the workspace (persists config, appends telemetry)</td></tr>
+      <tr><td><code>execute</code></td><td>Run shell commands (smoke tests, seed scripts)</td></tr>
+      <tr><td><code>mcp</code></td><td>Call all registered MCP servers (<code>sdlc-harness</code> GitLab tools)</td></tr>
+      <tr><td><code>skill</code></td><td>Activate the <code>sdlc-harness</code> skill</td></tr>
+      <tr><td><code>todo</code></td><td>Use <code>update_todo_list</code> to track multi-step governance runs</td></tr>
+      <tr><td><code>subagent</code></td><td>Spawn subagents for parallel issue analysis</td></tr>
+      <tr><td><code>mode</code></td><td>Switch modes if needed</td></tr>
+    </tbody>
+  </table>
+  <p>No additional Bob configuration is required for the Developer persona beyond the
+  standard installation described in the runbook.</p>
+
+  <h3>What they demo</h3>
+  <ul>
+    <li>Trigger an <strong>Audit</strong> against the seeded project</li>
+    <li>Review AC-agent findings and <strong>accept</strong> a draft for a specific issue</li>
+    <li>Review an AM-agent finding, <strong>edit</strong> the proposed rewrite, and apply it</li>
+    <li><strong>Reject</strong> a DEP-agent dependency suggestion with a comment</li>
+  </ul>
+
+  <hr>
+
+  <h2>Persona 2 — Project Lead</h2>
+
+  <h3>Profile</h3>
+  <p>A technical lead or engineering manager responsible for backlog quality and sprint
+  planning. They use sdlc-harness to monitor the full backlog in bulk and act on
+  state-transition suggestions across multiple issues at once.</p>
+
+  <h3>GitLab role</h3>
+  <p><code>Owner</code>, the <code>root</code> account is already Owner of the
+  <code>sdlc-harness</code> group. In a real deployment this persona would typically be
+  <code>Maintainer</code> (the minimum role needed for label management and milestone
+  configuration).</p>
+  <table>
+    <thead><tr><th>Capability</th><th>Allowed?</th><th>Reason</th></tr></thead>
+    <tbody>
+      <tr><td>All Developer capabilities</td><td>✅</td><td>Superset</td></tr>
+      <tr><td>Create / manage labels</td><td>✅</td><td>Maintainer+</td></tr>
+      <tr><td>Create / manage milestones</td><td>✅</td><td>Maintainer+</td></tr>
+      <tr><td>Manage group members</td><td>✅</td><td>Owner only</td></tr>
+      <tr><td>Delete issues</td><td>✅</td><td>Owner only</td></tr>
+      <tr><td>Access project settings</td><td>✅</td><td>Maintainer+</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Bob permissions</h3>
+  <p>Same <code>🔧 SDLC Harness</code> mode and the same permission groups as the
+  Developer persona. The elevated capability comes from the GitLab role, not from
+  Bob.</p>
+
+  <h3>What they demo</h3>
+  <ul>
+    <li>Switch to <code>root</code> credentials in <code>bob-kit/mcp-server/.env</code>
+    (swap <code>GITLAB_TOKEN</code> for a <code>root</code> PAT) and confirm the same
+    skill works without reconfiguration.</li>
+    <li>Trigger a <strong>bulk Transition audit</strong> and apply state moves to
+    multiple issues in one session.</li>
+    <li>Show the telemetry acceptance rate after several accept/edit/reject
+    decisions.</li>
+  </ul>
+
+  <hr>
+
+  <h2>Setting up the demo user token</h2>
+  <p>For the <strong>Developer persona</strong> demo:</p>
+  <ol>
+    <li>Log into GitLab as <code>demo</code> at <strong>http://localhost:8080</strong>.</li>
+    <li>Go to <strong>User → Edit profile → Access Tokens</strong>.</li>
+    <li>Create a token named <code>sdlc-harness-mcp-demo</code> with <code>api</code>
+    scope.</li>
+    <li>Copy the token into <code>bob-kit/mcp-server/.env</code> as
+    <code>GITLAB_TOKEN</code>.</li>
+    <li>Restart the MCP server (or restart Bob) to pick up the new token.</li>
+    <li>Run the live smoke test:
+      <pre><code>cd bob-kit/mcp-server
+SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+    </li>
+  </ol>
+  <p>For the <strong>Project Lead persona</strong> demo, repeat the same steps while
+  logged in as <code>root</code>.</p>
+
+  <hr>
+
+  <h2>Switching personas during the demo</h2>
+  <p>To switch between personas mid-demo without re-running onboarding:</p>
+  <ol>
+    <li>Update <code>GITLAB_TOKEN</code> in <code>bob-kit/mcp-server/.env</code>.</li>
+    <li>Restart Bob (the MCP server process is restarted automatically).</li>
+    <li>The <code>.sdlc-harness.json</code> config is shared, no re-onboarding needed.</li>
+    <li>Run one quick <code>audit</code> call to confirm the new token works before
+    presenting.</li>
+  </ol>
+
+  <hr>
+
+  <h2>Minimum role reference</h2>
+  <table>
+    <thead><tr><th>Action the skill performs</th><th>Minimum GitLab role</th></tr></thead>
+    <tbody>
+      <tr><td>List issues</td><td>Reporter</td></tr>
+      <tr><td>Read issue descriptions and labels</td><td>Reporter</td></tr>
+      <tr><td>Add a comment (telemetry note)</td><td>Reporter</td></tr>
+      <tr><td>Update issue description or labels</td><td>Developer</td></tr>
+      <tr><td>Create a new issue</td><td>Developer</td></tr>
+      <tr><td>Close an issue</td><td>Developer</td></tr>
+      <tr><td>Create a merge request</td><td>Developer</td></tr>
+      <tr><td>Create a new label</td><td>Maintainer</td></tr>
+      <tr><td>Manage milestones</td><td>Maintainer</td></tr>
+    </tbody>
+  </table>
+  <p>For the P0 demo, <strong>Developer</strong> is sufficient. The only action that
+  requires a higher role is creating labels, and the <code>seed-issues.sh</code> script
+  creates all required labels as <code>root</code>, so the Developer persona never needs
+  to create new ones during the demo.</p>
+</main>
+<script src="../assets/nav.js"></script>
+</body>
+</html>

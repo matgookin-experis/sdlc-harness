@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>sdlc-harness documentation</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="index.html">sdlc-harness docs</a>
+    <a href="problem-statement.html">Problem Statement</a>
+    <a href="bob-usage.html">Bob Usage</a>
+    <a href="security.html">Security</a>
+    <a href="onboarding/runbook.html">Onboarding</a>
+    <a href="demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>sdlc-harness documentation</h1>
+  <p>Human-facing documentation for the sdlc-harness hackathon project, migrated from
+  Markdown to self-contained HTML (Task 47). Project setup and code-level docs (the
+  root <code>README.md</code>, <code>AGENTS.md</code>, <code>to-do.md</code>, and the
+  Bob skill itself) stay as Markdown, since tooling depends on their exact format; see
+  the note at the bottom of this page.</p>
+
+  <h2>Project</h2>
+  <div class="card-grid">
+    <a class="card" href="problem-statement.html">
+      <h3>Problem Statement &amp; Solution</h3>
+      <p>The problem, the solution, target users, and why it's a new approach.</p>
+    </a>
+    <a class="card" href="bob-usage.html">
+      <h3>How Bob Was Used to Build This</h3>
+      <p>Concrete, screenshot-backed detail on Bob usage during development.</p>
+    </a>
+    <a class="card" href="security.html">
+      <h3>Security Guidelines</h3>
+      <p>Credential handling rules for this hackathon repository.</p>
+    </a>
+  </div>
+
+  <h2>Onboarding</h2>
+  <div class="card-grid">
+    <a class="card" href="onboarding/runbook.html">
+      <h3>Onboarding Runbook</h3>
+      <p>Step-by-step setup: Docker stack, MCP server, Bob skill activation.</p>
+    </a>
+    <a class="card" href="onboarding/personas.html">
+      <h3>Persona &amp; Permission Guide</h3>
+      <p>The Developer and Project Lead demo personas, GitLab roles, Bob permissions.</p>
+    </a>
+    <a class="card" href="onboarding/onboarding-validation.html">
+      <h3>Onboarding Conversation Validation</h3>
+      <p>The seven-point checklist confirming onboarding actually persisted.</p>
+    </a>
+  </div>
+
+  <h2>Demo</h2>
+  <div class="card-grid">
+    <a class="card" href="demo/narrative.html">
+      <h3>Demo Narrative</h3>
+      <p>The full story arc and what carries the 90-second video cut.</p>
+    </a>
+    <a class="card" href="demo/script.html">
+      <h3>Demo Script</h3>
+      <p>Exact prompts, expected Bob responses, narration, and fallbacks.</p>
+    </a>
+    <a class="card" href="demo/recording-guide.html">
+      <h3>Screen Recording Guide</h3>
+      <p>Window layout, fonts, resolution, and a pre-recording checklist.</p>
+    </a>
+  </div>
+
+  <h2>What stays Markdown, and why</h2>
+  <p>A few files in this repository are read by tools, not just people, so converting
+  them to HTML would change what they do, not just how they look:</p>
+  <ul>
+    <li><code>bob-kit/skills/sdlc-harness/SKILL.md</code>, the skill definition Bob's
+    skill loader reads directly.</li>
+    <li><code>AGENTS.md</code> and <code>bob-kit/rules/01-sdlc-harness.md</code>, read
+    by AI coding agents and Bob by filename convention.</li>
+    <li><code>docs/superpowers/plans/*.md</code>, which use a checkbox convention a
+    specific planning skill parses.</li>
+    <li><code>to-do.md</code>, a living task tracker edited throughout the project, not
+    a finished deliverable.</li>
+    <li><code>README.md</code> at the repository root and inside <code>gitlab-local/</code>,
+    <code>bob-kit/</code>, and <code>bob-kit/mcp-server/</code>, since GitHub/GitLab
+    auto-render <code>README.md</code> as the folder landing page (an HTML file
+    doesn't get that treatment), and the same applies to
+    <code>weather-app/WEATHER-DASHBOARD.md</code> and <code>weather-app/tests.md</code>,
+    which are pushed as literal content into the seeded demo GitLab project by
+    <code>seed.sh</code> and rendered there.</li>
+  </ul>
+</main>
+<script src="assets/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding Runbook — sdlc-harness</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="../index.html">sdlc-harness docs</a>
+    <a href="../problem-statement.html">Problem Statement</a>
+    <a href="../bob-usage.html">Bob Usage</a>
+    <a href="../security.html">Security</a>
+    <a href="runbook.html">Onboarding</a>
+    <a href="../demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>SDLC Harness — New Team Member Onboarding Runbook</h1>
+  <div id="toc"></div>
+
+  <blockquote>
+    <p><strong>Time to complete:</strong> 20–30 minutes on a machine that already has
+    Docker and Node.js.</p>
+    <p><strong>Prerequisite checklist</strong>, confirm before you start:</p>
+    <ul>
+      <li><label><input type="checkbox"> Docker (Engine ≥ 24) and Docker Compose v2+
+      are installed and the daemon is running.</label></li>
+      <li><label><input type="checkbox"> Node.js ≥ 18 is installed (<code>node
+      --version</code>).</label></li>
+      <li><label><input type="checkbox"> You have cloned the <code>sdlc-harness</code>
+      repository and are in its root directory.</label></li>
+      <li><label><input type="checkbox"> You have IBM Bob installed and can open
+      it.</label></li>
+    </ul>
+  </blockquote>
+
+  <hr>
+
+  <h2>Step 1 — Create your local credentials file</h2>
+  <p>The <code>.env</code> files are gitignored and must be created locally. Copy the
+  examples:</p>
+  <pre><code>cp gitlab-local/.env.example gitlab-local/.env</code></pre>
+  <p>Open <code>gitlab-local/.env</code> and set <code>GITLAB_ROOT_PASSWORD</code> to a
+  strong password of your choice. This password is used for the GitLab <code>root</code>
+  admin account and the <code>demo</code> user, the only credential you need to remember
+  for the local instance.</p>
+  <blockquote>
+    <p>⚠️ Do not commit <code>.env</code> files. The <code>.gitignore</code> already
+    covers them; this is a double-check.</p>
+  </blockquote>
+
+  <hr>
+
+  <h2>Step 2 — Start the Docker stack</h2>
+  <p>From the <code>gitlab-local/</code> directory:</p>
+  <pre><code>cd gitlab-local
+./manage.sh start</code></pre>
+  <p>GitLab CE takes <strong>3–5 minutes</strong> to initialise on first boot. You can
+  monitor progress:</p>
+  <pre><code>./manage.sh logs          # follow all container logs (Ctrl+C to stop)
+./manage.sh status        # check container health</code></pre>
+  <p>Wait until <code>manage.sh status</code> shows <code>healthy</code> for the
+  <code>gitlab</code> container, or until you can open
+  <strong>http://localhost:8080</strong> in a browser and see the GitLab login page.</p>
+
+  <hr>
+
+  <h2>Step 3 — Verify the stack is healthy</h2>
+  <p>Run the smoke test (from <code>gitlab-local/</code>):</p>
+  <pre><code>./smoke.sh</code></pre>
+  <p>Expected output:</p>
+  <pre><code>✓ GitLab HTTP 200  (http://localhost:8080/users/sign_in)
+✓ Demo site HTTP 200  (http://localhost:8081)
+All checks passed.</code></pre>
+  <p><strong>Do not continue until smoke.sh exits 0.</strong> If it fails, check
+  <code>./manage.sh logs</code> for errors.</p>
+
+  <hr>
+
+  <h2>Step 4 — Seed demo data</h2>
+  <p>Still from <code>gitlab-local/</code>:</p>
+  <pre><code>./manage.sh seed</code></pre>
+  <p>This creates:</p>
+  <ul>
+    <li>A <code>SDLC Harness</code> GitLab group at <code>/sdlc-harness</code></li>
+    <li>A <code>demo</code> user (Developer role)</li>
+    <li>The <code>weather-dashboard</code> project with source files pushed</li>
+  </ul>
+  <p>Then seed the intentionally-incomplete demo issues:</p>
+  <pre><code>./manage.sh seed-issues</code></pre>
+  <p>This populates the <code>weather-dashboard</code> project with 10–12 issues that
+  have missing acceptance criteria, vague descriptions, broken dependency links, and
+  missing test coverage, exactly the signal each P0 agent needs to act on in the demo.</p>
+  <p>At the end you will see a summary with the project URL and credentials. Make a
+  note of them.</p>
+
+  <hr>
+
+  <h2>Step 5 — Install and build the MCP server</h2>
+  <p>From the <strong>project root</strong> (<code>sdlc-harness/</code>):</p>
+  <pre><code>bash bob-kit/mcp-server/install.sh</code></pre>
+  <p>This:</p>
+  <ol>
+    <li>Checks Node.js ≥ 18</li>
+    <li>Runs <code>npm install</code> and <code>npm run build</code> in
+    <code>bob-kit/mcp-server/</code></li>
+    <li>Merges the <code>sdlc-harness</code> MCP server entry into
+    <code>~/.bob/mcp.json</code> without overwriting any other servers you have
+    configured</li>
+    <li>Merges the <code>🔧 SDLC Harness</code> mode into
+    <code>~/.bob/settings/custom_modes.yaml</code></li>
+    <li>Runs the mock smoke test to confirm the build is healthy</li>
+  </ol>
+  <p>Expected output ends with:</p>
+  <pre><code>✓ Smoke test passed
+==============================
+Installation complete.</code></pre>
+
+  <hr>
+
+  <h2>Step 6 — Configure MCP server credentials</h2>
+  <p>Copy the MCP server env example and fill in your GitLab credentials:</p>
+  <pre><code>cp bob-kit/mcp-server/.env.example bob-kit/mcp-server/.env</code></pre>
+  <p>Open <code>bob-kit/mcp-server/.env</code> and set:</p>
+  <table>
+    <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>GITLAB_HOST</code></td><td><code>http://localhost:8080</code></td></tr>
+      <tr><td><code>GITLAB_PROJECT</code></td><td><code>sdlc-harness/weather-dashboard</code></td></tr>
+      <tr><td><code>GITLAB_TOKEN</code></td><td>A Personal Access Token (see below)</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Creating a Personal Access Token:</strong></p>
+  <ol>
+    <li>Log into GitLab at <strong>http://localhost:8080</strong> as <code>root</code>
+    (password from Step 1).</li>
+    <li>Go to <strong>User → Edit profile → Access Tokens</strong>.</li>
+    <li>Create a token named <code>sdlc-harness-mcp</code> with <code>api</code> scope
+    and any expiry you like.</li>
+    <li>Copy the token value into <code>GITLAB_TOKEN</code> in your <code>.env</code>.</li>
+  </ol>
+
+  <hr>
+
+  <h2>Step 7 — Run the live smoke test</h2>
+  <p>Confirm the MCP server can reach GitLab:</p>
+  <pre><code>cd bob-kit/mcp-server
+SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+  <p>Expected output: all checks pass and your GitLab username is printed.</p>
+  <p>If this step fails, check <code>GITLAB_TOKEN</code> and <code>GITLAB_HOST</code> in
+  your <code>.env</code>.</p>
+
+  <hr>
+
+  <h2>Step 8 — Open Bob and activate the sdlc-harness skill</h2>
+  <ol>
+    <li>Restart Bob so it picks up the newly merged config (close and reopen, or use the
+    reload command if your IDE supports it).</li>
+    <li>In the Bob mode selector (bottom-left of the chat pane), choose
+    <strong>🔧 SDLC Harness</strong>.</li>
+    <li>Type the following to activate the skill and start onboarding:
+      <pre><code>govern my backlog</code></pre>
+      Bob will detect that the project has not been onboarded yet and start the guided
+      onboarding conversation (Task 18 / Phase 1 of the skill).
+    </li>
+  </ol>
+
+  <hr>
+
+  <h2>Step 9 — Complete the onboarding conversation</h2>
+  <p>Bob will ask four questions. Use the values below for the demo project:</p>
+  <table>
+    <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+    <tbody>
+      <tr><td>Which GitLab project should be governed?</td><td><code>http://localhost:8080/sdlc-harness/weather-dashboard</code></td></tr>
+      <tr><td>What work item types does the team use?</td><td><code>Story, Bug, Task</code></td></tr>
+      <tr><td>What are the workflow states?</td><td><code>Open, In Progress, In Review, Done</code></td></tr>
+      <tr><td>What are the transition rules?</td><td>Open→In Progress; In Progress→In Review or Open; In Review→Done or In Progress</td></tr>
+    </tbody>
+  </table>
+  <p>Bob will save this configuration to <code>.sdlc-harness.json</code> in the repo
+  root and confirm it is ready to monitor.</p>
+
+  <hr>
+
+  <h2>Step 10 — Verify the skill is ready</h2>
+  <p>After onboarding, Bob should print a confirmation summary and offer the governance
+  action menu:</p>
+  <pre><code>✅ Onboarding complete. Governing: sdlc-harness/weather-dashboard
+
+What would you like to do?
+  • Audit  — scan all open issues for quality problems
+  • Draft  — draft AC for a specific issue
+  • Link   — suggest dependency links
+  • Transition — propose state moves
+  • Template — apply work-item templates</code></pre>
+  <p>Type <code>audit</code> to confirm the agents can reach the seeded issues and
+  produce findings.</p>
+
+  <hr>
+
+  <h2>Quick Reference</h2>
+  <table>
+    <thead><tr><th>Resource</th><th>URL / path</th></tr></thead>
+    <tbody>
+      <tr><td>GitLab web UI</td><td>http://localhost:8080</td></tr>
+      <tr><td>Demo project</td><td>http://localhost:8080/sdlc-harness/weather-dashboard</td></tr>
+      <tr><td>Demo site</td><td>http://localhost:8081</td></tr>
+      <tr><td>Root login</td><td><code>root</code> / your <code>GITLAB_ROOT_PASSWORD</code></td></tr>
+      <tr><td>Demo login</td><td><code>demo</code> / your <code>GITLAB_ROOT_PASSWORD</code></td></tr>
+      <tr><td>MCP server credentials</td><td><code>bob-kit/mcp-server/.env</code></td></tr>
+      <tr><td>Telemetry log</td><td><code>sdlc-harness-telemetry.jsonl</code> (repo root, gitignored)</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2>Troubleshooting</h2>
+  <table>
+    <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><code>smoke.sh</code> fails with HTTP 502</td><td>GitLab is still starting, wait 2 min and retry</td></tr>
+      <tr><td><code>seed.sh</code> fails with "Could not create API token"</td><td>GitLab is not fully up, wait and retry</td></tr>
+      <tr><td><code>install.sh</code> fails: "node is not installed"</td><td>Install Node.js ≥ 18 (<code>nvm install 18</code> or package manager)</td></tr>
+      <tr><td>Bob doesn't show <code>🔧 SDLC Harness</code> mode</td><td>Restart Bob; check <code>~/.bob/settings/custom_modes.yaml</code> contains <code>sdlc-harness</code></td></tr>
+      <tr><td>MCP live smoke fails: "Unauthorized"</td><td>Check <code>GITLAB_TOKEN</code> in <code>bob-kit/mcp-server/.env</code>; recreate the PAT if expired</td></tr>
+      <tr><td><code>.sdlc-harness.json</code> not created after onboarding</td><td>The skill config persistence requires the onboarding flow to complete all four questions</td></tr>
+    </tbody>
+  </table>
+</main>
+<script src="../assets/nav.js"></script>
+</body>
+</html>

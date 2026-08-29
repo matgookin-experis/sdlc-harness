@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screen Recording Guide — sdlc-harness</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="../index.html">sdlc-harness docs</a>
+    <a href="../problem-statement.html">Problem Statement</a>
+    <a href="../bob-usage.html">Bob Usage</a>
+    <a href="../security.html">Security</a>
+    <a href="../onboarding/runbook.html">Onboarding</a>
+    <a href="narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>Screen Recording Guide</h1>
+  <p><span class="tag">Task 39</span></p>
+  <div id="toc"></div>
+
+  <p>Window layout, fonts, and recording settings so the video actually shows what the
+  demo script needs it to show: Bob visibly driving the interaction, not just its
+  effects on GitLab. This feeds the video deliverable (Task 41) directly.</p>
+
+  <h2>Window layout</h2>
+  <p>Two windows need to be legible at once for most of the script: the Bob chat pane
+  (where prompts and agent findings appear) and the GitLab browser tab (where the result
+  lands). Judges need to see Bob being used, not just its output, so Bob's pane should
+  never be off-screen or minimized during a step that involves typing a prompt.</p>
+  <ul>
+    <li><strong>Split screen, not full-screen switching.</strong> Snap Bob to the left
+    half of the screen and the GitLab tab to the right half (Windows: <code>Win +
+    Left</code> / <code>Win + Right</code>; macOS: drag to screen edge or use a tiling
+    tool). Full-screen alt-tabbing between the two reads as choppy on video and makes it
+    harder to follow cause and effect.</li>
+    <li><strong>Bob gets the wider half</strong> for the steps where a finding's full
+    text is on screen (Steps 5 and 6 of the <a href="script.html">Demo Script</a>, where
+    the proposed rewrite or the AC criteria need to be readable), roughly 55/45 in Bob's
+    favor. For Step 1, where the point is just showing the 12-issue backlog, GitLab can
+    take the wider half instead.</li>
+    <li><strong>Close everything else.</strong> No other browser tabs, no notification
+    pop-ups, no chat apps. Toggle OS notifications off before recording (Windows: Focus
+    Assist; macOS: Do Not Disturb).</li>
+  </ul>
+
+  <h2>Font sizes</h2>
+  <p>Video compression and any downscaling (a viewer on a phone, a judge on a small
+  laptop screen) both eat into legibility, so oversize everything relative to what's
+  comfortable for you personally:</p>
+  <ul>
+    <li><strong>Bob's chat pane:</strong> at least 16px equivalent, or one notch above
+    your usual working size. If Bob's IDE has a zoom setting, use it rather than
+    fighting with font-size preferences buried in settings.</li>
+    <li><strong>GitLab browser:</strong> zoom to 125-150% (<code>Ctrl +</code> /
+    <code>Cmd +</code>) before recording. GitLab's default web font size assumes a full
+    monitor at arm's length, not a compressed video frame.</li>
+    <li><strong>Terminal, if any command-line steps are shown:</strong> match whatever
+    size you used for Bob's pane so the two don't visually clash when both are on
+    screen.</li>
+  </ul>
+
+  <h2>Recording settings</h2>
+  <ul>
+    <li><strong>Resolution:</strong> 1920x1080 (1080p), 16:9. This is the safe default
+    for YouTube/Loom playback and matches most laptop displays without
+    letterboxing.</li>
+    <li><strong>Frame rate:</strong> 30 fps is enough; this is mostly static text and
+    typing, not motion.</li>
+    <li><strong>Cursor highlighting:</strong> turn on a cursor-highlight or
+    click-indicator setting so judges can follow exactly what's being clicked or where
+    text is being typed. Built-in options: Windows' own pointer trail/highlight
+    settings under Ease of Access, or a dedicated tool like OBS Studio's "Highlight
+    Cursor" filter if using OBS. Whatever tool you use, verify the highlight is
+    actually visible in a played-back sample clip before the real take, not just in the
+    live preview.</li>
+    <li><strong>Recording tool:</strong> OBS Studio if you want a scene with the two
+    windows pre-arranged and reusable across takes (useful given Task 38's reset makes
+    re-takes cheap); the built-in Windows Game Bar (<code>Win + Alt + R</code>) or
+    macOS screen recording (<code>Cmd + Shift + 5</code>) are fine if you'd rather not
+    set up a scene.</li>
+    <li><strong>Audio:</strong> narrate live if you're comfortable timing it against the
+    script, or record screen-only and lay narration over it in post. Either way, do a
+    10-second mic test clip first and listen back for background noise or clipping
+    before the real take.</li>
+  </ul>
+
+  <h2>Pre-recording checklist</h2>
+  <p>Run through the <a href="script.html">Demo Script</a>'s own Pre-flight section
+  first (stack reset, telemetry file cleared, WatsonX provider confirmed active), then
+  confirm:</p>
+  <ul>
+    <li><label><input type="checkbox"> Bob pane and GitLab tab both fit on screen at the
+    sizes above, nothing is cut off</label></li>
+    <li><label><input type="checkbox"> Notifications are off</label></li>
+    <li><label><input type="checkbox"> Cursor highlighting is confirmed visible in a
+    short test clip</label></li>
+    <li><label><input type="checkbox"> Audio test clip sounds clean</label></li>
+    <li><label><input type="checkbox"> A full test take of Steps 5-7 (the actual cut)
+    has been recorded and played back once before the take you intend to keep</label></li>
+  </ul>
+</main>
+<script src="../assets/nav.js"></script>
+</body>
+</html>

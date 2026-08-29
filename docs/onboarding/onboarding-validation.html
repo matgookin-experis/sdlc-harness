@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onboarding Conversation Validation — sdlc-harness</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="../index.html">sdlc-harness docs</a>
+    <a href="../problem-statement.html">Problem Statement</a>
+    <a href="../bob-usage.html">Bob Usage</a>
+    <a href="../security.html">Security</a>
+    <a href="runbook.html">Onboarding</a>
+    <a href="../demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>Onboarding Conversation Validation</h1>
+  <p><span class="tag">Task 34 — P0</span></p>
+  <div id="toc"></div>
+
+  <p>Verifies that after a user completes the guided onboarding conversation the skill
+  correctly persists all project configuration and is ready for agent monitoring.</p>
+
+  <hr>
+
+  <h2>What onboarding must persist</h2>
+  <p>After the user answers all four onboarding questions, the skill must write a
+  <code>.sdlc-harness.json</code> file to the repository root with this schema:</p>
+  <pre><code>{
+  "projectUrl":      "http://localhost:8080/sdlc-harness/weather-dashboard",
+  "workItemTypes":   ["Story", "Bug", "Task"],
+  "workflowStates":  ["Open", "In Progress", "In Review", "Done"],
+  "transitionRules": {
+    "Open":       ["In Progress"],
+    "In Progress": ["In Review", "Open"],
+    "In Review":  ["Done", "In Progress"]
+  }
+}</code></pre>
+  <p>All four top-level fields are required. The skill must reject (with an actionable
+  error message) any configuration where <code>projectUrl</code> is empty or
+  <code>workflowStates</code> is an empty array.</p>
+
+  <hr>
+
+  <h2>Validation checklist</h2>
+  <p>Run through this checklist after completing the onboarding conversation with Bob.</p>
+
+  <h3>1. Config file created</h3>
+  <pre><code>cat .sdlc-harness.json</code></pre>
+  <p>Expected: valid JSON containing <code>projectUrl</code>, <code>workItemTypes</code>,
+  <code>workflowStates</code>, and <code>transitionRules</code> matching the values you
+  provided.</p>
+  <p><strong>Fail condition:</strong> file does not exist, or is empty, or is not valid
+  JSON.</p>
+
+  <hr>
+
+  <h3>2. All four required fields are present</h3>
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Requirement</th></tr></thead>
+    <tbody>
+      <tr><td><code>projectUrl</code></td><td>string</td><td>Non-empty URL</td></tr>
+      <tr><td><code>workItemTypes</code></td><td>string[]</td><td>At least one entry</td></tr>
+      <tr><td><code>workflowStates</code></td><td>string[]</td><td>At least two entries</td></tr>
+      <tr><td><code>transitionRules</code></td><td>object</td><td>At least one key; each key is a valid <code>workflowState</code></td></tr>
+    </tbody>
+  </table>
+  <p><strong>Check:</strong></p>
+  <pre><code>python3 -c "
+import json, sys
+c = json.load(open('.sdlc-harness.json'))
+assert c.get('projectUrl'), 'projectUrl missing or empty'
+assert c.get('workItemTypes'), 'workItemTypes missing or empty'
+assert len(c.get('workflowStates', [])) >= 2, 'workflowStates needs at least 2 entries'
+assert c.get('transitionRules'), 'transitionRules missing or empty'
+print('OK — all required fields present')
+"</code></pre>
+
+  <hr>
+
+  <h3>3. Idempotent re-run does not error</h3>
+  <p>Re-run the onboarding with the same values (or say <code>re-onboard</code> in
+  Bob):</p>
+  <p>Expected: Bob detects the existing config, reports "already onboarded", and either
+  skips or offers to overwrite; it does <strong>not</strong> crash or duplicate the file
+  content.</p>
+
+  <hr>
+
+  <h3>4. Skill enters monitoring-ready state</h3>
+  <p>After successful onboarding, Bob must offer the governance action menu without
+  requiring the user to re-enter any configuration:</p>
+  <pre><code>✅ Onboarding complete. Governing: sdlc-harness/weather-dashboard
+
+What would you like to do?
+  • Audit
+  • Draft
+  • Link
+  • Transition
+  • Template</code></pre>
+  <p><strong>Fail condition:</strong> Bob asks for the project URL again on the next
+  message, or throws an error about missing config when the user types
+  <code>audit</code>.</p>
+
+  <hr>
+
+  <h3>5. Validation errors are actionable</h3>
+  <p>Test that the skill rejects invalid input before writing the config file:</p>
+  <p><strong>Test A, missing projectUrl:</strong></p>
+  <p>In the onboarding conversation, leave the project URL blank and press Enter.</p>
+  <p>Expected: Bob replies with an error naming <code>projectUrl</code> as the missing
+  field and prompts the user to re-enter it. The config file is <strong>not</strong>
+  written.</p>
+  <p><strong>Test B, empty workflowStates:</strong></p>
+  <p>Provide a project URL but enter an empty list for workflow states.</p>
+  <p>Expected: Bob replies with an error naming <code>workflowStates</code> and prompts
+  re-entry.</p>
+
+  <hr>
+
+  <h3>6. Config survives Bob restart</h3>
+  <p>After onboarding completes:</p>
+  <ol>
+    <li>Close and reopen Bob.</li>
+    <li>Switch to <code>🔧 SDLC Harness</code> mode.</li>
+    <li>Type <code>audit</code>.</li>
+  </ol>
+  <p>Expected: Bob loads <code>.sdlc-harness.json</code> automatically and proceeds to
+  the audit without asking onboarding questions again.</p>
+  <p><strong>Fail condition:</strong> Bob starts the onboarding conversation again from
+  scratch.</p>
+
+  <hr>
+
+  <h3>7. MCP server is reachable using the persisted config</h3>
+  <p>After onboarding, trigger an action that requires a live GitLab call (e.g.
+  <code>audit</code> or <code>Draft for issue #1</code>). Bob must successfully reach
+  the GitLab API using the <code>projectUrl</code> from <code>.sdlc-harness.json</code>.</p>
+  <p><strong>Check:</strong></p>
+  <ul>
+    <li>Bob lists at least one open issue from the seeded project.</li>
+    <li>No "Unauthorized" or "Not Found" errors appear.</li>
+  </ul>
+  <p>If this step fails, check <code>GITLAB_TOKEN</code> in
+  <code>bob-kit/mcp-server/.env</code> and confirm the MCP server live smoke test
+  passes:</p>
+  <pre><code>cd bob-kit/mcp-server
+SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+
+  <hr>
+
+  <h2>Acceptance criteria (for Task 34)</h2>
+  <p>All seven checks above must pass on a clean machine after following the
+  <a href="runbook.html">onboarding runbook</a>.</p>
+  <table>
+    <thead><tr><th>Check</th><th>Pass condition</th></tr></thead>
+    <tbody>
+      <tr><td>1. Config file created</td><td><code>.sdlc-harness.json</code> exists and is valid JSON</td></tr>
+      <tr><td>2. All required fields present</td><td>Script above exits 0</td></tr>
+      <tr><td>3. Idempotent re-run</td><td>No error, no duplicate</td></tr>
+      <tr><td>4. Monitoring-ready state</td><td>Governance menu offered without re-prompting</td></tr>
+      <tr><td>5. Validation errors actionable</td><td>Error names the offending field; file not written</td></tr>
+      <tr><td>6. Config survives Bob restart</td><td>Audit works without re-onboarding</td></tr>
+      <tr><td>7. MCP server reachable</td><td>At least one live issue returned; no auth errors</td></tr>
+    </tbody>
+  </table>
+</main>
+<script src="../assets/nav.js"></script>
+</body>
+</html>

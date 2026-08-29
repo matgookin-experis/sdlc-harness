@@ -4,8 +4,10 @@ IBM Hackathon project. sdlc-harness is a Bob skill that governs work item qualit
 GitLab backlog throughout the SDLC: it drafts missing acceptance criteria, flags vague
 descriptions, suggests dependency links, and proposes state transitions, all surfaced to
 a developer for review inside Bob before anything gets written back to GitLab. See
-[PROBLEM_STATEMENT.md](PROBLEM_STATEMENT.md) for the full problem/solution writeup and
-[BOB_USAGE.md](BOB_USAGE.md) for how Bob was used to build this project.
+[Problem Statement & Solution](docs/problem-statement.html) for the full problem/solution
+writeup and [How Bob Was Used to Build This](docs/bob-usage.html) for how Bob was used to
+build this project. Documentation lives under `docs/` as self-contained HTML; start at
+[docs/index.html](docs/index.html).
 
 The repo is self-contained: a Docker Compose stack runs a real GitLab CE instance plus a
 small demo web app ("Weather Dashboard") to govern, and a Bob skill/MCP server pair does
@@ -18,7 +20,7 @@ the governance work.
 | `gitlab-local/` | Docker stack (GitLab CE + nginx demo site) and all the scripts to start, seed, and reset it. |
 | `weather-app/` | The demo artefact under governance — plain HTML/CSS/JS, no build step. |
 | `bob-kit/` | The Bob skill, MCP server, and config templates that implement sdlc-harness. Templates only; see "Installing the Bob skill" below. |
-| `docs/` | Onboarding runbook, persona guide, and implementation plans. |
+| `docs/` | Project documentation as self-contained HTML (`docs/index.html` is the entry point), plus implementation plans under `docs/superpowers/`. |
 | `bob-sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
 
 ## Running the demo
@@ -49,7 +51,7 @@ the governance work.
 3. In Bob, switch to the `🔧 SDLC Harness` mode and say something like `govern my backlog`.
    The skill walks through a short onboarding conversation the first time, then runs the
    agents against the seeded issues. The full onboarding runbook is in
-   [docs/onboarding/runbook.md](docs/onboarding/runbook.md).
+   [docs/onboarding/runbook.html](docs/onboarding/runbook.html).
 
 ## Security
 
@@ -64,5 +66,5 @@ keep credentials out of git history:
 - Before pushing, check `git diff` for anything that shouldn't be there and confirm `.env`
   isn't staged (`git status`).
 
-[SECURITY.MD](SECURITY.MD) has the full checklist. If in doubt, ask before pushing rather
-than after.
+[Security Guidelines](docs/security.html) has the full checklist. If in doubt, ask before
+pushing rather than after.

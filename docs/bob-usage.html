@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How Bob Was Used to Build This — sdlc-harness</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="index.html">sdlc-harness docs</a>
+    <a href="problem-statement.html">Problem Statement</a>
+    <a href="bob-usage.html">Bob Usage</a>
+    <a href="security.html">Security</a>
+    <a href="onboarding/runbook.html">Onboarding</a>
+    <a href="demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>How Bob Was Used to Build This</h1>
+  <div id="toc"></div>
+
+  <p>This describes how the team used the IBM Bob IDE <em>during development</em> of
+  sdlc-harness. It's distinct from how the shipped product uses Bob at runtime, which is
+  covered in <a href="problem-statement.html">Problem Statement &amp; Solution</a> and
+  <code>bob-kit/skills/sdlc-harness/SKILL.md</code>. Every session referenced here has a
+  corresponding screenshot in <code>bob-sessions/</code>, captured as the build progressed
+  rather than reconstructed afterward.</p>
+
+  <h2>Planning and problem framing</h2>
+  <p>The to-do list this project was built against wasn't written by hand and then handed
+  to Bob to execute; Bob wrote the first draft of it. The team's prompt
+  (<a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a>)
+  pointed Bob at the already-drafted Problem Statement and asked it to break the project
+  into an MVP task list "using the IBM Bob IDE," specifying a required numbering and
+  priority format, which is the structure <code>to-do.md</code> still follows.</p>
+
+  <p>The Problem Statement itself went through a similar loop the other direction: the
+  team wrote a first pass, then handed it to Bob along with the exact judging constraints
+  (500 words, specific problem, target users, why it's creative) and asked it to tighten
+  the draft against them
+  (<a href="../bob-sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a>).</p>
+
+  <h2>Infrastructure</h2>
+  <p>The GitLab Docker stack was built and debugged in Bob, not just scaffolded. One
+  session explicitly asked Bob to troubleshoot why <code>./manage.sh seed</code> wasn't
+  working against <code>gitlab-local/docker-compose.yml</code>
+  (<a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a>).
+  Another asked Bob to confirm, against <code>to-do.md</code>, whether Section 1
+  (Infrastructure) was actually complete before moving on
+  (<a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a>)
+  rather than assuming it from memory.</p>
+
+  <h2>Skill authoring</h2>
+  <p>The <code>sdlc-harness</code> skill scaffold (Task 17) started as its own Bob
+  session: create a branch off <code>dev</code>, then plan the skill scaffold
+  specifically
+  (<a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a>).
+  <code>SKILL.md</code> was then built up incrementally across several follow-on sessions
+  rather than in one shot, including a later refactor that folded a separate
+  <code>AGENT_ORCHESTRATION.md</code> draft directly into <code>SKILL.md</code> once it
+  became clear the two were describing the same thing from different angles
+  (<code>git log</code>: <code>ed21619 refactor: fold AGENT_ORCHESTRATION.md into
+  SKILL.md</code>).</p>
+
+  <h2>MCP server and agent implementation</h2>
+  <p>Sections 2A (the MCP server: GitLab client, issue/MR tools,
+  <code>work-item-format</code>) and 2B (the five agents, review interface, telemetry)
+  were built through structured, per-task Bob sessions rather than one continuous
+  conversation. The Task 18/19 work in particular used an explicit plan file
+  (<code>docs/superpowers/plans/2025-07-14-task-18-19-onboarding-templates.md</code>)
+  built around the <code>subagent-driven-development</code> convention: each dispatched
+  task gets only its own step and the prior task's handoff summary, not the whole plan
+  re-read every time, which keeps token cost from scaling linearly with plan length. One
+  of these sessions
+  (<a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a>)
+  shows a 91.5k/270k-token planning task for exactly this pair of tasks. A separate
+  session
+  (<a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a>)
+  shows Section 3 (Tasks 27 through 31: Bob mode definition, WatsonX config, MCP registry
+  entry, agent orchestration design, skill unit tests) dispatched to Bob as one batch, at
+  1.2M tokens sent and an API cost of 2.41 for that session alone.</p>
+
+  <p>The agent design iterated rather than landing correctly on the first pass: a later
+  commit (<code>f0032a3 Tasks 20-21: agents produce a draft brief instead of templated
+  prose</code>) reworked the AC and Ambiguity agents specifically because their first
+  version produced generic filler text ("the system responds correctly") instead of
+  grounding output in the actual issue content, a change made after reviewing what the
+  agents had actually produced.</p>
+
+  <h2>The weather app</h2>
+  <p>The Weather Dashboard demo artifact (<code>weather-app/</code>) was built by a
+  second team member in a separate Bob session, using Bob's own task/subtask tracking
+  feature rather than a single freeform request: a six-item todo list (create
+  <code>index.html</code>, <code>styles.css</code>, <code>app.js</code>,
+  <code>README.md</code>, <code>tests.md</code>, then review and validate all files),
+  tracked and checked off inside Bob's Tasks panel
+  (<a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png.png"><code>Prasanna-weather-dashboard-session-summary.png.png</code></a>).</p>
+
+  <h2>watsonx.ai</h2>
+  <p>The shipped skill's agents call an LLM at exactly two points: the Acceptance
+  Criteria agent and the Ambiguity agent, both when drafting prose grounded in an issue's
+  text (the Dependency, State-transition, and Coverage agents are plain deterministic
+  code and never call a model at all; see the per-agent-role rationale in
+  <code>bob-kit/custom_modes.yaml</code>). That model is
+  <code>ibm/granite-3-3-8b-instruct</code>, wired as Bob's own provider under Settings →
+  Providers → WatsonX (API key, Project ID, and endpoint URL configured there, documented
+  for reinstallation in <code>bob-kit/README.md</code>). The 128k context window is used
+  specifically for the full-backlog Audit path, where Bob has to hold many issues'
+  findings in context at once to compile a single report; single-issue drafting doesn't
+  need it.</p>
+
+  <h2>What the screenshots show</h2>
+  <table>
+    <thead>
+      <tr><th>Screenshot</th><th>What it captures</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><a href="../bob-sessions/teamexperis_create_gitlab_container.png"><code>teamexperis_create_gitlab_container.png</code></a></td><td>Initial repo clone task</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a></td><td><code>to-do.md</code> drafted by Bob from the Problem Statement</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a></td><td>Bob tightening the problem statement against the judging constraints</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a></td><td>Debugging <code>docker-compose.yml</code> / <code>manage.sh seed</code></td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a></td><td>Bob confirming Section 1 completion against <code>to-do.md</code></td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a></td><td>Branching and planning the skill scaffold (Task 17)</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>
+      <tr><td><a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png.png"><code>Prasanna-weather-dashboard-session-summary.png.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
+    </tbody>
+  </table>
+</main>
+<script src="assets/nav.js"></script>
+</body>
+</html>
