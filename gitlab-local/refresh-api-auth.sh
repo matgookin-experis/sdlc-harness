@@ -54,9 +54,23 @@ fi
 
 ENV_TMP="$TMP_DIR/runtime.env"
 if [ -f "$RUNTIME_ENV" ]; then
-  awk -F= '$1 != "GITLAB_TOKEN" { print }' "$RUNTIME_ENV" > "$ENV_TMP"
+  # Rewrite GITLAB_TOKEN in place when it already exists, instead of stripping
+  # it and appending the new value at the end of the file. A strip-and-append
+  # leaves any descriptive comment above the old line orphaned in its original
+  # spot while the bare value lands after unrelated content (e.g. this repo's
+  # WatsonX .env.example footer) — cosmetically messier on every refresh, even
+  # though a flat strip-and-append is functionally harmless for a .env parser.
+  # Duplicate GITLAB_TOKEN lines, if any ever existed, collapse to the first.
+  awk -v tok="$TOKEN" -F= '
+    $1 == "GITLAB_TOKEN" {
+      if (!found) { print "GITLAB_TOKEN=" tok; found=1 }
+      next
+    }
+    { print }
+    END { if (!found) print "GITLAB_TOKEN=" tok }
+  ' "$RUNTIME_ENV" > "$ENV_TMP"
 else
-  : > "$ENV_TMP"
+  printf 'GITLAB_TOKEN=%s\n' "$TOKEN" > "$ENV_TMP"
 fi
 # Backfill GITLAB_HOST/GITLAB_PROJECT if this .env is pre-existing (e.g. from
 # an unrelated template, such as this repo's WatsonX .env.example) and never
@@ -65,7 +79,6 @@ fi
 grep -q '^GITLAB_HOST=' "$ENV_TMP" || echo 'GITLAB_HOST=http://localhost:8080' >> "$ENV_TMP"
 grep -q '^GITLAB_PROJECT=' "$ENV_TMP" || echo 'GITLAB_PROJECT=sdlc-harness/weather-dashboard' >> "$ENV_TMP"
 grep -q '^SDLC_DEBUG=' "$ENV_TMP" || echo 'SDLC_DEBUG=false' >> "$ENV_TMP"
-printf 'GITLAB_TOKEN=%s\n' "$TOKEN" >> "$ENV_TMP"
 chmod 600 "$ENV_TMP"
 mv "$ENV_TMP" "$RUNTIME_ENV"
 chmod 600 "$RUNTIME_ENV"
