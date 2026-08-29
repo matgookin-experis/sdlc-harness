@@ -1,68 +1,68 @@
-# IBM Hackathon GitHub Project Template
+# sdlc-harness
 
-This GitHub project template is for IBM Hackathon projects. It includes pre-configured security files to help prevent accidental credential commits and potential account suspension during the hackathon.
+IBM Hackathon project. sdlc-harness is a Bob skill that governs work item quality on a
+GitLab backlog throughout the SDLC: it drafts missing acceptance criteria, flags vague
+descriptions, suggests dependency links, and proposes state transitions, all surfaced to
+a developer for review inside Bob before anything gets written back to GitLab. See
+[PROBLEM_STATEMENT.md](PROBLEM_STATEMENT.md) for the full problem/solution writeup and
+[BOB_USAGE.md](BOB_USAGE.md) for how Bob was used to build this project.
 
-## 🚀 Quick Start
+The repo is self-contained: a Docker Compose stack runs a real GitLab CE instance plus a
+small demo web app ("Weather Dashboard") to govern, and a Bob skill/MCP server pair does
+the governance work.
 
-1. **Use this template to create your project:**
-   - Click "Use this template" button above and select "Create a new repository"
-   - Name your repository
-   - Click "Create repository"
+## Repository layout
 
-2. **Clone your new repository:**
+| Directory | What it is |
+|---|---|
+| `gitlab-local/` | Docker stack (GitLab CE + nginx demo site) and all the scripts to start, seed, and reset it. |
+| `weather-app/` | The demo artefact under governance — plain HTML/CSS/JS, no build step. |
+| `bob-kit/` | The Bob skill, MCP server, and config templates that implement sdlc-harness. Templates only; see "Installing the Bob skill" below. |
+| `docs/` | Onboarding runbook, persona guide, and implementation plans. |
+| `bob-sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
 
+## Running the demo
+
+1. Start the GitLab stack:
    ```bash
-   git clone https://github.com/HACKATHON-ORG/your-repo-name.git
-   cd your-repo-name
+   cd gitlab-local
+   cp .env.example .env   # set GITLAB_ROOT_PASSWORD
+   docker compose up -d   # first boot takes 3-5 minutes
+   ./smoke.sh              # confirms both containers are healthy
+   ./manage.sh seed         # creates the demo group, user, and project
+   ./manage.sh seed-issues  # seeds 12 intentionally incomplete issues for the agents to act on
    ```
+   Full details, including minimum host requirements and the ports each service uses, are
+   in [gitlab-local/README.md](gitlab-local/README.md). To wipe and reseed at any point,
+   run `./manage.sh reset`.
 
-3. **Set up environment variables:**
-
+2. Install the Bob skill (one-time, per machine):
    ```bash
-   # Copy the example file
-   cp .env.example .env
-
-   # Edit .env with your actual credentials
-   # Use your preferred editor (nano, vim, code, etc.)
-   nano .env
+   bash bob-kit/mcp-server/install.sh
    ```
+   This builds the MCP server, merges the sdlc-harness mode and MCP registration into your
+   Bob config without touching anything else you've configured, and runs a smoke test. See
+   [bob-kit/README.md](bob-kit/README.md) for the manual steps if you'd rather not run the
+   installer, including how to point Bob's WatsonX provider at
+   `ibm/granite-3-3-8b-instruct`.
 
-4. **Verify .gitignore is working:**
+3. In Bob, switch to the `🔧 SDLC Harness` mode and say something like `govern my backlog`.
+   The skill walks through a short onboarding conversation the first time, then runs the
+   agents against the seeded issues. The full onboarding runbook is in
+   [docs/onboarding/runbook.md](docs/onboarding/runbook.md).
 
-   ```bash
-   # This should NOT show .env file
-   git status
+## Security
 
-   # This should confirm .env is ignored
-   git check-ignore -v .env
-   ```
+This repo started from IBM's hackathon project template, which ships a few guardrails to
+keep credentials out of git history:
 
-5. **Start developing!**
+- `.gitignore` and `.bobignore` exclude every `.env` file and anything that looks like a
+  credential, key, or secret by name.
+- Each part of the stack that needs credentials (`gitlab-local/`, `bob-kit/mcp-server/`,
+  and the repo root) has its own `.env.example` to copy from. Copy it, fill in real values
+  in the `.env` it produces, and never commit that file.
+- Before pushing, check `git diff` for anything that shouldn't be there and confirm `.env`
+  isn't staged (`git status`).
 
-## 🔒 Security Features
-
-This template includes:
-
-- **`.gitignore`** - Prevents committing credentials and live session files
-- **`.bobignore`** - Prevents AI assistants from logging credentials
-- **`.env.example`** - Template for your environment variables
-
-## 📋 Before Every Commit
-
-Always run this checklist:
-
-- [ ] Reviewed `git diff` for sensitive data
-- [ ] No hardcoded API keys or passwords
-- [ ] `.env` file is NOT in staged changes
-- [ ] No files with "credential" or "secret" in name
-- [ ] Used environment variables for all credentials
-
-## 🆘 Need Help?
-
-- Read [SECURITY.md](SECURITY.MD) for detailed guidelines
-- Contact hackathon support through mentor channel
-- Ask in the hackathon Slack workspace
-
----
-
-**Remember:** Security is everyone's responsibility. When in doubt, ask for help!
+[SECURITY.MD](SECURITY.MD) has the full checklist. If in doubt, ask before pushing rather
+than after.
