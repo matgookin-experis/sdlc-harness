@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -10,7 +11,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { mergeConfig, mergeMcpJson, mergeModes } from './merge-bob-config.mjs';
+import {
+  mergeConfig,
+  mergeMcpJson,
+  mergeModes,
+  unmergeConfig,
+  unmergeMcpJson,
+  unmergeModes,
+} from './merge-bob-config.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -118,7 +126,106 @@ function testFailureAtomicValidation() {
   }
 }
 
+/**
+ * Verify MCP JSON un-merging: removes only the sdlc-harness entry, is a
+ * no-op when the file is absent or the entry was never present.
+ * @returns {void}
+ */
+function testMcpUnmerge() {
+  const bobDir = createBobDir();
+  const path = join(bobDir, 'settings', 'mcp.json');
+
+  try {
+    // No-op when the file doesn't exist at all -- must not create one.
+    unmergeMcpJson(bobDir);
+    assert.equal(existsSync(path), false);
+
+    writeFileSync(path, JSON.stringify({
+      mcpServers: {
+        existing: { command: 'keep' },
+        'sdlc-harness': { command: 'node' },
+      },
+    }));
+    unmergeMcpJson(bobDir);
+    const after = JSON.parse(readFileSync(path, 'utf-8'));
+    assert.equal(after.mcpServers.existing.command, 'keep');
+    assert.equal(Object.hasOwn(after.mcpServers, 'sdlc-harness'), false);
+
+    // Idempotent: already-removed is a silent no-op, not an error.
+    unmergeMcpJson(bobDir);
+    const second = JSON.parse(readFileSync(path, 'utf-8'));
+    assert.deepEqual(second, after);
+  } finally {
+    rmSync(dirname(bobDir), { recursive: true, force: true });
+  }
+}
+
+/**
+ * Verify custom-mode YAML un-merging: removes only the sdlc-harness mode,
+ * is a no-op when the file is absent or the mode was never present.
+ * @returns {void}
+ */
+function testModeUnmerge() {
+  const bobDir = createBobDir();
+  const path = join(bobDir, 'settings', 'custom_modes.yaml');
+  const existing = [
+    'customModes:',
+    '  - slug: existing-mode',
+    '    name: Existing',
+    '  - slug: sdlc-harness',
+    '    name: Stale',
+    'unrelatedSetting: true',
+    '',
+  ].join('\n');
+
+  try {
+    // No-op when the file doesn't exist at all -- must not create one.
+    unmergeModes(bobDir);
+    assert.equal(existsSync(path), false);
+
+    writeFileSync(path, existing);
+    unmergeModes(bobDir);
+    const after = parse(readFileSync(path, 'utf-8'));
+    assert.equal(after.unrelatedSetting, true);
+    assert.equal(after.customModes.some((mode) => mode.slug === 'sdlc-harness'), false);
+    assert.equal(after.customModes.find((mode) => mode.slug === 'existing-mode').name, 'Existing');
+
+    // Idempotent: already-removed is a silent no-op, not an error.
+    unmergeModes(bobDir);
+    const second = parse(readFileSync(path, 'utf-8'));
+    assert.deepEqual(second, after);
+  } finally {
+    rmSync(dirname(bobDir), { recursive: true, force: true });
+  }
+}
+
+/**
+ * Verify unmergeConfig composes both removals against a real merged state.
+ * @returns {void}
+ */
+function testUnmergeConfig() {
+  const bobDir = createBobDir();
+  const mcpPath = join(bobDir, 'settings', 'mcp.json');
+  const modesPath = join(bobDir, 'settings', 'custom_modes.yaml');
+
+  try {
+    mergeMcpJson(projectRoot, bobDir);
+    mergeModes(projectRoot, bobDir);
+    unmergeConfig(bobDir);
+
+    const mcp = JSON.parse(readFileSync(mcpPath, 'utf-8'));
+    assert.equal(Object.hasOwn(mcp.mcpServers, 'sdlc-harness'), false);
+    const modes = parse(readFileSync(modesPath, 'utf-8'));
+    assert.equal(modes.customModes.some((mode) => mode.slug === 'sdlc-harness'), false);
+  } finally {
+    rmSync(dirname(bobDir), { recursive: true, force: true });
+  }
+}
+
 testMcpMerge();
 testModeMerge();
 testFailureAtomicValidation();
+testMcpUnmerge();
+testModeUnmerge();
+testUnmergeConfig();
 process.stdout.write('Bob config merge tests passed.\n');

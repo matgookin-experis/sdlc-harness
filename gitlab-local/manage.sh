@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 usage() {
-  echo "Usage: $0 {start|stop|restart|seed|seed-issues|refresh-token|reset|password|logs|status}"
+  echo "Usage: $0 {start|stop|restart|seed|seed-issues|refresh-token|reset|uninstall|password|logs|status}"
   exit 1
 }
 
@@ -65,6 +65,34 @@ case "${1:-}" in
     bash "$SCRIPT_DIR/seed-issues.sh"
     echo ""
     echo "Reset complete — stack is back to a known, fully-seeded state."
+    ;;
+  uninstall)
+    # Full "reset as if freshly cloned": broader and more destructive than
+    # `reset`. `reset` keeps everything installed and reseeds; this tears
+    # down the Docker stack (containers + volumes), deletes every generated
+    # .env/state file, and calls bob-kit/mcp-server/uninstall.sh for the
+    # Bob-side cleanup (build artifacts, global MCP/mode registration, skill,
+    # rule). Leaves you at a genuine blank slate, not a reseeded one.
+    if [ "${2:-}" != "-y" ] && [ "${2:-}" != "--yes" ]; then
+      read -r -p "This will DELETE all GitLab data, .env files, .sdlc-harness.json, telemetry, build artifacts, and the sdlc-harness Bob/MCP registration. Continue? [y/N] " confirm
+      case "$confirm" in
+        y|Y|yes|YES) ;;
+        *) echo "Aborted."; exit 1 ;;
+      esac
+    fi
+    REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+    echo "Tearing down Docker stack (including volumes)..."
+    docker compose down -v
+    echo "Removing local .env/state files..."
+    rm -f "$SCRIPT_DIR/.env" "$REPO_ROOT/.env" "$REPO_ROOT/.sdlc-harness.json" \
+          "$REPO_ROOT/sdlc-harness-telemetry.jsonl" \
+          "$REPO_ROOT/bob-kit/mcp-server/.env"
+    echo "Removing Bob/MCP registration and build artifacts..."
+    bash "$REPO_ROOT/bob-kit/mcp-server/uninstall.sh" "$REPO_ROOT" -y
+    echo ""
+    echo "Uninstall complete — repo is back to a freshly-cloned state."
+    echo "To set up again: cp .env.example .env, ./manage.sh start, ./manage.sh seed,"
+    echo "./manage.sh seed-issues, bash bob-kit/mcp-server/install.sh."
     ;;
   password)
     echo "Initial root password:"

@@ -236,15 +236,143 @@ export function mergeConfig(projectRoot, bobDir = DEFAULT_BOB_DIR) {
   atomicWrite(modes.path, modes.content);
 }
 
+// ---------------------------------------------------------------------------
+// Uninstall — the reverse of merge: surgically remove just the sdlc-harness
+// entries, preserving everything else untouched. Each piece is independent
+// and a no-op (not an error) when it was never installed, so uninstall is
+// safe to run against a partially-installed, already-removed, or never-
+// installed Bob config alike.
+// ---------------------------------------------------------------------------
+
 /**
- * Run the command-line config merge.
+ * Prepare the MCP configuration with the sdlc-harness entry removed, without
+ * writing it. Returns null when there is nothing to remove (file absent, no
+ * recognized servers key, or the entry isn't present).
+ * @param {string} [bobDir] - Bob configuration root.
+ * @returns {{ path: string, content: string } | null} Prepared file, or null.
+ */
+function prepareUnmergeMcpJson(bobDir = DEFAULT_BOB_DIR) {
+  const path = join(bobDir, 'settings', 'mcp.json');
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  const existing = readJsonObject(path);
+  const key = Object.hasOwn(existing, 'mcpServers')
+    ? 'mcpServers'
+    : Object.hasOwn(existing, 'servers')
+      ? 'servers'
+      : null;
+
+  if (key === null) {
+    return null;
+  }
+
+  const servers = existing[key];
+  if (
+    servers === null ||
+    typeof servers !== 'object' ||
+    Array.isArray(servers) ||
+    !Object.hasOwn(servers, 'sdlc-harness')
+  ) {
+    return null;
+  }
+
+  const { 'sdlc-harness': _removed, ...rest } = servers;
+  const merged = { ...existing, [key]: rest };
+
+  return { path, content: `${JSON.stringify(merged, null, 2)}\n` };
+}
+
+/**
+ * Remove the sdlc-harness MCP server registration, preserving unrelated
+ * entries untouched. No-op if it was never installed.
+ * @param {string} [bobDir] - Bob configuration root.
+ * @returns {void}
+ */
+export function unmergeMcpJson(bobDir = DEFAULT_BOB_DIR) {
+  const prepared = prepareUnmergeMcpJson(bobDir);
+  if (prepared) {
+    atomicWrite(prepared.path, prepared.content);
+  }
+}
+
+/**
+ * Prepare the custom-mode configuration with the sdlc-harness mode removed,
+ * without writing it. Returns null when there is nothing to remove.
+ * @param {string} [bobDir] - Bob configuration root.
+ * @returns {{ path: string, content: string } | null} Prepared file, or null.
+ */
+function prepareUnmergeModes(bobDir = DEFAULT_BOB_DIR) {
+  const targetPath = join(bobDir, 'settings', 'custom_modes.yaml');
+  if (!existsSync(targetPath)) {
+    return null;
+  }
+
+  const targetDocument = parseYaml(readFileSync(targetPath, 'utf-8'), targetPath);
+  if (!isMap(targetDocument.contents) || !targetDocument.has('customModes')) {
+    return null;
+  }
+
+  const modes = targetDocument.get('customModes', true);
+  if (!isSeq(modes)) {
+    return null;
+  }
+
+  const index = modes.items.findIndex(
+    (item) => isMap(item) && item.get('slug') === 'sdlc-harness',
+  );
+  if (index < 0) {
+    return null;
+  }
+
+  modes.items.splice(index, 1);
+  return { path: targetPath, content: targetDocument.toString() };
+}
+
+/**
+ * Remove the sdlc-harness custom mode, preserving unrelated modes and
+ * top-level YAML data untouched. No-op if it was never installed.
+ * @param {string} [bobDir] - Bob configuration root.
+ * @returns {void}
+ */
+export function unmergeModes(bobDir = DEFAULT_BOB_DIR) {
+  const prepared = prepareUnmergeModes(bobDir);
+  if (prepared) {
+    atomicWrite(prepared.path, prepared.content);
+  }
+}
+
+/**
+ * Remove both the MCP server registration and the custom mode. Each piece is
+ * independent — unlike mergeConfig, there is no shared validation step to
+ * fail atomically on, since removal only ever deletes a key that may or may
+ * not exist in the first place.
+ * @param {string} [bobDir] - Bob configuration root.
+ * @returns {void}
+ */
+export function unmergeConfig(bobDir = DEFAULT_BOB_DIR) {
+  unmergeMcpJson(bobDir);
+  unmergeModes(bobDir);
+}
+
+/**
+ * Run the command-line config merge, check, or uninstall.
  * @returns {void}
  */
 function main() {
   const isCheck = process.argv[2] === '--check';
-  const projectRoot = resolve(process.argv[isCheck ? 3 : 2] ?? process.cwd());
+  const isUninstall = process.argv[2] === '--uninstall';
   ensureDir(DEFAULT_BOB_DIR);
   ensureDir(join(DEFAULT_BOB_DIR, 'settings'));
+
+  if (isUninstall) {
+    unmergeConfig();
+    console.log('Removed sdlc-harness Bob configuration (if present).');
+    return;
+  }
+
+  const projectRoot = resolve(process.argv[isCheck ? 3 : 2] ?? process.cwd());
   if (isCheck) {
     validateConfig(projectRoot);
     console.log('Bob configuration is valid for merging.');
