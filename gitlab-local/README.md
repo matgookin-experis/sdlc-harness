@@ -155,6 +155,30 @@ The agents, the MCP tools and every seeded issue work without the demo site — 
 only serves the weather app for the demo video. `smoke.sh` treats it as optional
 and still exits 0 when only GitLab is healthy.
 
+### Seeding hangs at "Creating API token..."
+
+Both seed scripts mint their token by booting GitLab's Rails console inside the
+container (`gitlab-rails runner`). That boot loads the whole Rails app and is by
+far the heaviest step — on a cold container, or one short on RAM, it can take
+many minutes or appear to hang outright.
+
+Skip it by supplying your own token. In GitLab (signed in as `root`) go to
+**User settings → Access tokens**, create one with the `api` scope, then:
+
+```bash
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+./manage.sh seed
+./manage.sh seed-issues
+```
+
+Both scripts use it directly and never start the Rails console. This is the
+faster and more reliable path on any machine, and worth doing before a demo.
+
+If seeding is genuinely slow rather than stuck, check Docker Desktop's memory
+allocation — GitLab CE wants 4 GB and will thrash below that.
+
+---
+
 ### The password in `.env` does not work
 
 Check for a `$` in it. Docker Compose interprets `$` as variable interpolation, so

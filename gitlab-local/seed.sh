@@ -80,6 +80,15 @@ echo "Creating API token for root..."
 # redirect (no MSYS argv translation involved), and the only path-like text
 # reaching docker.exe is embedded inside the `sh -c '...'` string, which MSYS's
 # bare-absolute-path heuristic does not rewrite.
+if [ -n "${GITLAB_TOKEN:-}" ]; then
+  # Booting the Rails console costs a lot of memory and several minutes on a cold
+  # or resource-starved container, and it is the step most likely to hang. A token
+  # supplied by the caller skips it entirely. Create one in the GitLab UI under
+  # User settings -> Access tokens, with the `api` scope.
+  TOKEN="$GITLAB_TOKEN"
+  echo "Using GITLAB_TOKEN from the environment (skipping Rails console)."
+else
+
 cat > "$TMP_DIR/runner.rb" <<'RUBY'
 begin
   PersonalAccessToken.where(name: 'seed-script-token', user_id: 1).delete_all
@@ -108,6 +117,7 @@ if [ -z "$TOKEN" ] || [[ "$TOKEN" == ERROR:* ]]; then
   exit 1
 fi
 echo "Token obtained."
+fi
 
 # ── Helper: call GitLab API ───────────────────────────────────────────────────
 api() {
