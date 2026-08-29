@@ -17,6 +17,7 @@ import type {
   GitLabLabel,
   GitLabMR,
   GitLabNote,
+  GitLabIssueLink,
   CreateIssueParams,
   UpdateIssueParams,
   CreateMRParams,
@@ -228,6 +229,28 @@ export class GitLabClient {
     return this.request<GitLabNote>(url, {
       method: "POST",
       body: JSON.stringify({ body }),
+    });
+  }
+
+  /**
+   * Create a relationship between two issues in the configured project.
+   * GitLab accepts either a numeric project ID or a URL-encoded project path
+   * for target_project_id, so the configured project path keeps this scoped.
+   */
+  async createIssueLink(
+    sourceIid: number,
+    targetIid: number,
+    linkType: "relates_to" | "blocks"
+  ): Promise<GitLabIssueLink> {
+    const project = await this.request<{ id: number }>(this.projectUrl(""));
+    const url = this.projectUrl(`/issues/${sourceIid}/links`);
+    return this.request<GitLabIssueLink>(url, {
+      method: "POST",
+      body: JSON.stringify({
+        target_project_id: project.id,
+        target_issue_iid: targetIid,
+        link_type: linkType,
+      }),
     });
   }
 

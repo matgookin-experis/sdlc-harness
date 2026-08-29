@@ -692,6 +692,29 @@ async function testGitLabIssueWriter(): Promise<void> {
   });
   await gitlabIssueWriterTool.execute({ action: "add-note", iid: 1, body: "hello" }, noteCtx);
   assert((noteBody as Record<string, unknown>)["body"] === "hello", "add-note sends correct body");
+
+  // create-link
+  let linkBody: unknown;
+  const linkCtx = buildMockContext((url, init) => {
+    if (/\/projects\/demo%2Fproject$/.test(url) && !init?.method) {
+      return { status: 200, body: { id: 42 } };
+    }
+    if (url.includes("/issues/1/links") && init?.method === "POST") {
+      linkBody = init.body ? JSON.parse(init.body as string) : null;
+      return { status: 201, body: { link_type: "blocks" } };
+    }
+    return { status: 404, body: { message: "Not found" } };
+  });
+  await gitlabIssueWriterTool.execute({
+    action: "create-link",
+    source_iid: 1,
+    target_iid: 2,
+    link_type: "blocks",
+  }, linkCtx);
+  const parsedLinkBody = linkBody as Record<string, unknown>;
+  assert(parsedLinkBody["target_project_id"] === 42, "create-link stays scoped to the configured project");
+  assert(parsedLinkBody["target_issue_iid"] === 2, "create-link sends the target IID");
+  assert(parsedLinkBody["link_type"] === "blocks", "create-link maps the relationship type");
 }
 
 // ---------------------------------------------------------------------------
@@ -829,30 +852,26 @@ async function testMcpTransportIntegration(): Promise<void> {
       assert(toolNames.includes(name), `listTools includes ${name}`);
     }
 
-    // 2. Every tool preserves its action variants and required fields.
+    // 2. Every tool exposes Bob-compatible top-level properties. The server's
+    // Zod schema still enforces action-specific required fields at call time.
     for (const tool of tools) {
       const schema = tool.inputSchema as {
         type?: string;
-        anyOf?: Array<{
-          properties?: Record<string, { const?: string }>;
-          required?: string[];
-        }>;
+        properties?: Record<string, { enum?: string[] }>;
+        required?: string[];
       };
       assert(schema.type === "object", `${tool.name} publishes an object input schema`);
-      assert(Array.isArray(schema.anyOf) && schema.anyOf.length > 0, `${tool.name} publishes action variants`);
-      for (const variant of schema.anyOf ?? []) {
-        assert(variant.properties?.["action"]?.const !== undefined, `${tool.name} variant identifies its action`);
-        assert(variant.required?.includes("action") === true, `${tool.name} variant requires action`);
-      }
+      assert(Object.keys(schema.properties ?? {}).length > 1, `${tool.name} publishes top-level parameters for Bob`);
+      assert((schema.properties?.["action"]?.enum?.length ?? 0) > 0, `${tool.name} publishes allowed actions`);
+      assert(schema.required?.includes("action") === true, `${tool.name} requires action`);
     }
 
     const writerSchema = tools.find((tool) => tool.name === "gitlab-issue-writer")?.inputSchema as {
-      anyOf?: Array<{ properties?: Record<string, { const?: string }>; required?: string[] }>;
+      properties?: Record<string, unknown>;
     };
-    const closeVariant = writerSchema.anyOf?.find(
-      (variant) => variant.properties?.["action"]?.const === "close-issue",
-    );
-    assert(closeVariant?.required?.includes("iid") === true, "close-issue schema requires iid");
+    assert(writerSchema.properties?.["iid"] !== undefined, "writer schema exposes iid");
+    assert(writerSchema.properties?.["source_iid"] !== undefined, "writer schema exposes source_iid");
+    assert(writerSchema.properties?.["target_iid"] !== undefined, "writer schema exposes target_iid");
 
     // 3. Invoke work-item-format through the MCP client (get-standard)
     const fmtResult = await mcpClient.callTool({

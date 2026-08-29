@@ -145,6 +145,8 @@ export interface ReviewResult {
   gitlabWriteCalled: boolean;
   /** The value actually written (finding's suggestion or the edited value). */
   writtenValue?: string;
+  /** Safe diagnostic when the GitLab write did not complete. */
+  error?: string;
   /** Telemetry entry appended for this decision. */
   telemetryEntry: TelemetryEntry;
 }

@@ -27,7 +27,7 @@ import { runStateTransitionAgent } from '../src/agents/state-transition-agent';
 import { runCoverageAgent } from '../src/agents/coverage-agent';
 import { applyFinding, rejectFinding, _resetSessionTracker } from '../src/skill/review';
 import { readTelemetry, computeAcceptanceRate } from '../src/skill/telemetry';
-import { stubWriterAdapter } from '../src/skill/gitlab-writer-adapter';
+import { createGitLabRestWriterAdapter, stubWriterAdapter } from '../src/skill/gitlab-writer-adapter';
 import type { TelemetryEntry, DependencyFinding } from '../src/models';
 
 // ---------------------------------------------------------------------------
@@ -602,12 +602,13 @@ describe('Human review interface', () => {
     suggestedValue: 'Given a user\nWhen they open the dashboard\nThen they see the forecast widget',
   };
 
-  // FIX-1: defaultWriterAdapter returns written:false for writable findings,
+  // Missing runtime configuration returns written:false for writable findings,
   // so the telemetry outcome must be 'failed', NOT 'accepted'.
   // This prevents fabricated acceptance-rate numbers.
-  test('FIX-1: default unwired adapter logs outcome "failed", never "accepted"', async () => {
-    const result = await applyFinding(finding, { editedValue: null });
-    // The default adapter is not wired to GitLab — write did not happen.
+  test('FIX-1: unconfigured adapter logs outcome "failed", never "accepted"', async () => {
+    const unconfigured = createGitLabRestWriterAdapter(globalThis.fetch, () => null);
+    const result = await applyFinding(finding, { editedValue: null }, unconfigured);
+    // No GitLab configuration — write did not happen.
     expect(result.gitlabWriteCalled).toBe(false);
     // Must log 'failed', not 'accepted' — otherwise computeAcceptanceRate is wrong.
     expect(result.telemetryEntry.outcome).toBe('failed');
@@ -685,7 +686,7 @@ describe('Human review interface', () => {
   });
 
   // P1-5: DependencyFinding can be passed to applyFinding / rejectFinding
-  test('P1-5: DependencyFinding can be passed to applyFinding — always report-only', async () => {
+  test('P1-5: DependencyFinding can be written through the review adapter', async () => {
     const depFinding: DependencyFinding = {
       agent: 'DEP',
       sourceIid: 3,
@@ -695,10 +696,82 @@ describe('Human review interface', () => {
       confidence: 0.85,
     };
     const result = await applyFinding(depFinding, { editedValue: null }, stubWriterAdapter);
-    // Dependency findings are never written — no links API
-    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.gitlabWriteCalled).toBe(true);
     expect(result.telemetryEntry.outcome).toBe('accepted');
     expect(result.telemetryEntry.agent).toBe('DEP');
+  });
+
+  test('real adapter appends accepted criteria to the existing issue description', async () => {
+    let updateBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(JSON.stringify({ description: 'Existing details', labels: ['Open'], state: 'opened' }), { status: 200 });
+      }
+      updateBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret',
+      workflowStates: ['Open', 'In Progress', 'In Review', 'Done'],
+    }));
+
+    const result = await applyFinding(finding, { editedValue: null }, adapter);
+
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(updateBody['description']).toContain('Existing details');
+    expect(updateBody['description']).toContain('## Acceptance Criteria');
+    expect(updateBody['description']).toContain(finding.suggestedValue);
+  });
+
+  test('real adapter replaces an ambiguous description', async () => {
+    let updateBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) return new Response(JSON.stringify({ description: 'fix it', labels: ['Open'], state: 'opened' }), { status: 200 });
+      updateBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+    }));
+    const rewritten = 'The save handler returns HTTP 500 when the display name is empty.';
+    const result = await applyFinding({ agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: rewritten }, { editedValue: null }, adapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(updateBody).toEqual({ description: rewritten });
+  });
+
+  test('real adapter replaces workflow labels for a state transition', async () => {
+    let updateBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) return new Response(JSON.stringify({ description: '', labels: ['Bug', 'Open'], state: 'opened' }), { status: 200 });
+      updateBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret',
+      workflowStates: ['Open', 'In Progress', 'In Review', 'Done'],
+    }));
+    const result = await applyFinding({ agent: 'ST', issueIid: 5, action: 'state_transition', suggestedValue: 'In Review' }, { editedValue: null }, adapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(updateBody['labels']).toBe('Bug,In Review');
+  });
+
+  test('real adapter creates a GitLab dependency link', async () => {
+    let linkBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      if (!init?.method) return new Response(JSON.stringify({ id: 42 }), { status: 200 });
+      expect(url).toContain('/issues/3/links');
+      linkBody = JSON.parse(init?.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({ link_type: 'blocks' }), { status: 201 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: [],
+    }));
+    const depFinding: DependencyFinding = {
+      agent: 'DEP', sourceIid: 3, targetIid: 9, suggestedLinkType: 'blocks', confidence: 0.9,
+    };
+    const result = await applyFinding(depFinding, { editedValue: null }, adapter);
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(linkBody).toEqual({ target_project_id: 42, target_issue_iid: 9, link_type: 'blocks' });
   });
 
   test('P1-5: DependencyFinding can be passed to rejectFinding', async () => {

@@ -211,12 +211,10 @@ removed). Threshold: 0.12 for a finding; 0.25 for high-confidence boost.
 - Domain-specific heuristics (e.g. matching "/token refresh/") are intentionally
   excluded from `BLOCKS_SIGNALS`; they produce unreliable directions on real backlogs.
 
-**Report-only (no write path):** `DependencyFinding` objects are **always report-only**.
-The `gitlab-issue-writer` MCP tool has no native issue-links endpoint, so
-`applyFinding` never writes for DEP findings (`gitlabWriteCalled` is always `false`).
-Present the finding as a recommendation the team can action manually, or document it
-as a comment by calling `gitlab-issue-writer` (action: `add-note`) outside the normal
-review loop if the user explicitly requests it.
+**Write path (after approval):** call `gitlab-issue-writer` with
+`action: "create-link"`, the finding's `sourceIid`, `targetIid`, and
+`suggestedLinkType`. GitLab's `relates_to` spelling is handled inside the MCP tool.
+Never create the relationship before the user approves it.
 
 ---
 
@@ -247,9 +245,10 @@ current state (directly or through intermediate states).
 
 **NEVER automatically changes GitLab state.** All proposals go through Phase 4.
 
-**Write path (if user accepts):** Call `gitlab-issue-writer` (action: `update-issue`)
-with the appropriate `state_event` (`close` for Done, otherwise update labels to reflect
-the new state).
+**Write path (if user accepts):** for intermediate states call
+`gitlab-issue-writer` with `action: "update-issue"`, removing the old workflow label
+and adding the target-state label. For Done call `action: "close-issue"` after updating
+the label. Use `action: "reopen-issue"` when moving a closed issue back to an active state.
 
 ---
 
@@ -364,12 +363,12 @@ Action-specific write semantics (for a real adapter):
 | `state_transition` | Apply scoped label swap; GitLab has only `opened`/`closed` states | `update-issue` |
 | `rewrite_desc` | Replace issue description with the drafted rewrite | `update-issue`; refused while the finding still carries a `draft` |
 | `missing_coverage` | **Never written** — report only | COV findings are informational |
-| `dependency_link` | **Never written** by the adapter — report only | No links API; use `add-note` outside review loop if needed |
+| `dependency_link` | Create a GitLab issue link | `create-link`; maps `relates-to` to GitLab's `relates_to` |
 
-**Missing integration note:** The `gitlab-issue-writer` MCP tool does not yet expose a
-native "add link" operation. Until it does, dependency links are presented as
-recommendations only.  The adapter boundary in `gitlab-writer-adapter.ts` is the
-documented extension point for a future real integration.
+The compiled review bridge (`npm run review -- apply <decision.json>`) uses the real
+default adapter and appends telemetry only after GitLab confirms the write. Bob may use
+the MCP writer directly when operating interactively, but it must then append the same
+telemetry event only after the MCP call succeeds.
 
 ---
 

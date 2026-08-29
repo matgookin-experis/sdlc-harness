@@ -120,3 +120,6 @@ build/
 # ============================================
 # sdlc-harness telemetry (append-only decision log — must not be committed)
 sdlc-harness-telemetry.jsonl
+
+# sdlc-harness onboarding output (committing would make fresh clones skip Phase 1)
+.sdlc-harness.json

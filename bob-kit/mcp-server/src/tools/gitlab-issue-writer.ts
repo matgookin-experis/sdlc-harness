@@ -7,6 +7,7 @@
  *  - close-issue     : close an issue by IID
  *  - reopen-issue    : reopen a closed issue
  *  - add-note        : post a comment on an issue
+ *  - create-link     : create a relates-to / blocks relationship
  *
  * Duplicate detection (create-issue):
  *  Before creating, the tool searches for open issues with the same title
@@ -65,6 +66,12 @@ const argsSchema = z.discriminatedUnion("action", [
     action: z.literal("add-note"),
     iid: z.number().int().min(1).describe("Project-scoped issue IID to comment on."),
     body: z.string().min(1).describe("Comment body (Markdown)."),
+  }),
+  z.object({
+    action: z.literal("create-link"),
+    source_iid: z.number().int().min(1).describe("IID of the prerequisite/source issue."),
+    target_iid: z.number().int().min(1).describe("IID of the related/dependent issue."),
+    link_type: z.enum(["relates-to", "blocks"]).describe("Relationship to create."),
   }),
 ]);
 
@@ -147,7 +154,8 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
     "action='create-issue' creates a new issue with duplicate detection (pass force=true to bypass). " +
     "action='update-issue' patches title, description, labels, milestone, or assignees on an existing issue. " +
     "action='close-issue' / 'reopen-issue' change issue state. " +
-    "action='add-note' posts a comment.",
+    "action='add-note' posts a comment. " +
+    "action='create-link' creates a relates-to or blocks issue relationship.",
   argsSchema,
 
   async execute(args: Args, context: ToolContext): Promise<unknown> {
@@ -204,6 +212,13 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
 
       case "add-note":
         return gitlab.createIssueNote(args.iid, args.body);
+
+      case "create-link":
+        return gitlab.createIssueLink(
+          args.source_iid,
+          args.target_iid,
+          args.link_type === "relates-to" ? "relates_to" : "blocks"
+        );
     }
   },
 };

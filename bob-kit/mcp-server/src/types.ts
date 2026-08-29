@@ -113,6 +113,13 @@ export interface GitLabNote {
   system: boolean;
 }
 
+/** A relationship between two GitLab issues. */
+export interface GitLabIssueLink {
+  source_issue: GitLabIssue;
+  target_issue: GitLabIssue;
+  link_type: "relates_to" | "blocks" | "is_blocked_by";
+}
+
 export interface CreateIssueParams {
   title: string;
   description?: string;

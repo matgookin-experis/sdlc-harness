@@ -20,14 +20,13 @@
  *
  * Finding types accepted:
  *  - AgentFinding (AC, AM, ST, COV agents) — written via the GitLab writer adapter.
- *  - DependencyFinding (DEP agent) — report-only: the GitLab API has no
- *    issue-links endpoint wired yet, so `gitlabWriteCalled` is always false
- *    for dependency findings.  See SKILL.md §Phase 3 note on Task 22.
+ *  - DependencyFinding (DEP agent) — written through GitLab's issue-links API.
  *
  * Action-specific write behaviour:
  *  - 'draft_ac'         — appends the AC text to the issue description.
  *  - 'state_transition' — the suggested state must be applied via a scoped label
  *                         swap; the adapter receives the target state name.
+ *  - 'dependency_link'  — creates the proposed blocks / relates-to link.
  *  - 'missing_coverage' — report-only advisory; never written to GitLab.
  *  - 'rewrite_desc'     — replaces the description once the drafter has written it.
  *
@@ -86,11 +85,11 @@ function editedFieldsFor(finding: AnyFinding): string[] {
 
 /**
  * Returns true when the finding's action allows a write to GitLab.
- * Report-only findings ('missing_coverage') and
- * dependency findings (no links API yet) must never be written.
+ * Coverage findings remain report-only. All other accepted findings have a
+ * concrete GitLab write path, including dependency links.
  */
 function isWritable(finding: AnyFinding): boolean {
-  if (isDependencyFinding(finding)) return false;
+  if (isDependencyFinding(finding)) return true;
   const action = (finding as AgentFinding).action;
   return action === 'draft_ac' || action === 'rewrite_desc' || action === 'state_transition';
 }
@@ -103,8 +102,7 @@ function isWritable(finding: AnyFinding): boolean {
  * Apply an agent finding — with or without an edit — and log the outcome.
  *
  * Accepts both AgentFinding and DependencyFinding (AnyFinding).
- * Dependency findings and advisory-only findings are logged but NOT written
- * to GitLab (see module-level contract above).
+ * Coverage findings are advisory-only; all other findings are written.
  *
  * @param finding   The original agent finding to act on.
  * @param options   `editedValue` is null for a straight accept; a non-null
@@ -150,13 +148,17 @@ export async function applyFinding(
   // Attempt the write only for writable actions; reconcile outcome against the result.
   let gitlabWriteCalled = false;
   let writtenValue: string | undefined;
+  let writeError: string | undefined;
   let outcome: 'accepted' | 'edited' | 'failed';
 
   if (isWritable(finding)) {
-    const valueToWrite =
-      options.editedValue ?? (finding as AgentFinding).suggestedValue;
+    const valueToWrite = options.editedValue ?? (
+      isDependencyFinding(finding)
+        ? finding.suggestedLinkType
+        : (finding as AgentFinding).suggestedValue
+    );
     const writeResult = await adapter.applyFindingToGitLab(
-      finding as AgentFinding,
+      finding,
       valueToWrite
     );
     gitlabWriteCalled = writeResult.written;
@@ -168,6 +170,7 @@ export async function applyFinding(
       // Write did NOT reach GitLab — record as 'failed' so the acceptance-rate
       // denominator is not inflated by writes that never happened.
       outcome = 'failed';
+      writeError = writeResult.error;
     }
   } else {
     // Non-writable findings (advisory / report-only / dependency): no write is
@@ -198,6 +201,7 @@ export async function applyFinding(
   return {
     gitlabWriteCalled,
     writtenValue,
+    error: writeError,
     telemetryEntry,
   };
 }

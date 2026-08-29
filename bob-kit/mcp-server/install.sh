@@ -3,9 +3,8 @@
 #
 # What it does:
 #  1. Confirms Node.js ≥18 is available.
-#  2. Runs npm install in the mcp-server directory.
-#  3. Builds TypeScript (npm run build).
-#  4. Runs all tests (npm run smoke) — must pass before touching Bob config.
+#  2. Installs, tests, and builds both the skill runtime and MCP server.
+#  3. Runs all tests — must pass before touching Bob config.
 #  5. Copies bob-kit/skills/sdlc-harness/ to ~/.bob/skills/sdlc-harness/.
 #  6. Copies bob-kit/rules/01-sdlc-harness.md to ~/.bob/rules/.
 #  7. Merges MCP server and custom-mode configuration into ~/.bob/settings/
@@ -62,6 +61,7 @@ echo "✓ Node.js $(node --version)"
 # ---------------------------------------------------------------------------
 echo ""
 echo "Installing dependencies..."
+(cd "$SKILL_SRC" && npm install --prefer-offline 2>&1)
 (cd "$MCP_DIR" && npm install --prefer-offline 2>&1)
 echo "✓ npm install complete"
 
@@ -70,10 +70,13 @@ echo "✓ npm install complete"
 # ---------------------------------------------------------------------------
 echo ""
 echo "Building TypeScript..."
+(cd "$SKILL_SRC" && npm run typecheck 2>&1)
+(cd "$SKILL_SRC" && npm test 2>&1)
+(cd "$SKILL_SRC" && npm run build 2>&1)
 (cd "$MCP_DIR" && npm run lint 2>&1)
 (cd "$MCP_DIR" && npm run typecheck 2>&1)
 (cd "$MCP_DIR" && npm run build 2>&1)
-echo "✓ Lint, typecheck, and build complete"
+echo "✓ Skill tests, lint, typecheck, and build complete"
 
 # ---------------------------------------------------------------------------
 # 4. Run tests — gate: must pass before modifying Bob configuration
@@ -96,7 +99,8 @@ echo "Installing sdlc-harness skill..."
 SKILL_DEST="$BOB_DIR/skills/sdlc-harness"
 
 mkdir -p "$SKILL_DEST"
-cp -r "$SKILL_SRC/." "$SKILL_DEST/"
+cp "$SKILL_SRC/SKILL.md" "$SKILL_SRC/package.json" "$SKILL_SRC/package-lock.json" "$SKILL_DEST/"
+cp -r "$SKILL_SRC/dist" "$SKILL_SRC/src" "$SKILL_DEST/"
 echo "✓ Skill copied to $SKILL_DEST"
 
 # ---------------------------------------------------------------------------

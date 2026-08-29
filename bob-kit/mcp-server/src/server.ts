@@ -2,8 +2,8 @@
  * server.ts — MCP Server factory for sdlc-harness.
  *
  * The low-level Server is used because it accepts a protocol-level JSON Schema.
- * This preserves every discriminated-union variant and its required fields while
- * also supplying the top-level object type required by MCP.
+ * Bob needs parameters exposed as top-level properties, while the server keeps
+ * the full Zod discriminated union for action-specific runtime validation.
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -22,14 +22,48 @@ import type { ToolContext } from "./types.js";
 // Schema conversion — Zod discriminated union → MCP-compatible JSON Schema
 // ---------------------------------------------------------------------------
 
+type JsonSchema = Record<string, unknown>;
+
 /**
- * Convert a Zod schema while retaining union-specific required fields.
- * MCP requires a top-level object type, so it is added alongside the generated
- * anyOf variants.
+ * Bob currently ignores properties that only appear inside `anyOf`. Expose a
+ * flat top-level object for tool discovery while retaining the original Zod
+ * discriminated union for strict validation when a tool is called.
  */
-function buildInputSchema(schema: ZodTypeAny): Record<string, unknown> {
+export function buildInputSchema(schema: ZodTypeAny): JsonSchema {
   const json = zodToJsonSchema(schema, { $refStrategy: "none" }) as Record<string, unknown>;
   delete json.$schema;
+
+  const variants = Array.isArray(json.anyOf) ? (json.anyOf as JsonSchema[]) : [];
+  if (variants.length > 0) {
+    const properties: JsonSchema = {};
+    const actionValues: unknown[] = [];
+
+    for (const variant of variants) {
+      const variantProperties = (variant.properties ?? {}) as JsonSchema;
+      for (const [name, property] of Object.entries(variantProperties)) {
+        if (name === "action") {
+          const value = (property as JsonSchema).const;
+          if (value !== undefined && !actionValues.includes(value)) actionValues.push(value);
+          continue;
+        }
+        properties[name] ??= property;
+      }
+    }
+
+    properties.action = {
+      type: "string",
+      enum: actionValues,
+      description: "Operation to perform. Other required fields depend on this action.",
+    };
+
+    return {
+      type: "object",
+      properties,
+      required: ["action"],
+      additionalProperties: false,
+    };
+  }
+
   return { type: "object", ...json };
 }
 
