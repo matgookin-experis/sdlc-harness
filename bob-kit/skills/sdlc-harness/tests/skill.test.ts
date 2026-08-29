@@ -171,6 +171,58 @@ describe('Onboarding flow', () => {
     const result = await onboard(PROJECT_CONFIG);
     expect(result.ok).toBe(true);
   });
+
+  test('returns validation error when workItemTypes contains a blank string', async () => {
+    const result = await onboard({
+      projectUrl: PROJECT_CONFIG.projectUrl,
+      workItemTypes: ['Story', ''],
+      workflowStates: PROJECT_CONFIG.workflowStates,
+      transitionRules: PROJECT_CONFIG.transitionRules,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/workItemTypes/i);
+  });
+
+  test('returns validation error when transitionRules target is not a known state', async () => {
+    const result = await onboard({
+      projectUrl: PROJECT_CONFIG.projectUrl,
+      workItemTypes: PROJECT_CONFIG.workItemTypes,
+      workflowStates: ['Open', 'In Progress'],
+      transitionRules: { 'Open': ['In Progress', 'Closed'] }, // "Closed" not in workflowStates
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Closed/);
+  });
+
+  test('persists coverage config when provided', async () => {
+    const result = await onboard({
+      projectUrl: PROJECT_CONFIG.projectUrl,
+      workItemTypes: PROJECT_CONFIG.workItemTypes,
+      workflowStates: PROJECT_CONFIG.workflowStates,
+      transitionRules: PROJECT_CONFIG.transitionRules,
+      coverage: { testFilePatterns: ['**/*.test.ts'], enabled: true },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.config?.coverage).toEqual({
+      testFilePatterns: ['**/*.test.ts'],
+      enabled: true,
+    });
+  });
+
+  test('config has no coverage key when not provided', async () => {
+    const result = await onboard({
+      projectUrl: PROJECT_CONFIG.projectUrl,
+      workItemTypes: PROJECT_CONFIG.workItemTypes,
+      workflowStates: PROJECT_CONFIG.workflowStates,
+      transitionRules: PROJECT_CONFIG.transitionRules,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.config?.coverage).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

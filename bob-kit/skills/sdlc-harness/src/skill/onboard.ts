@@ -7,7 +7,7 @@
  * unit tests can exercise validation without touching the filesystem.
  */
 
-import type { ProjectConfig, TransitionRules } from '../models';
+import type { ProjectConfig, TransitionRules, CoverageConfig } from '../models';
 
 // ---------------------------------------------------------------------------
 // Input / output shapes
@@ -18,6 +18,8 @@ export interface OnboardInput {
   workItemTypes: string[];
   workflowStates: string[];
   transitionRules: TransitionRules;
+  /** Optional — pass only when the user explicitly opts in to coverage tracking (Task 24). */
+  coverage?: CoverageConfig;
 }
 
 export interface OnboardResult {
@@ -44,6 +46,9 @@ function validateUrl(url: string): string | null {
 function validateWorkItemTypes(types: string[]): string | null {
   if (!Array.isArray(types) || types.length === 0) {
     return 'workItemTypes must be a non-empty array of strings.';
+  }
+  if (types.some((t) => typeof t !== 'string' || t.trim().length === 0)) {
+    return 'workItemTypes must not contain blank entries.';
   }
   return null;
 }
@@ -105,6 +110,7 @@ export async function onboard(input: OnboardInput): Promise<OnboardResult> {
     workItemTypes: input.workItemTypes,
     workflowStates: input.workflowStates,
     transitionRules: input.transitionRules,
+    ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
   };
 
   return { ok: true as const, config };

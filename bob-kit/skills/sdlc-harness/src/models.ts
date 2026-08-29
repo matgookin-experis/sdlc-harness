@@ -23,6 +23,8 @@ export interface ProjectConfig {
   workflowStates: string[];
   /** Valid state transitions: { "Open": ["In Progress"], ... } */
   transitionRules: TransitionRules;
+  /** Optional test-coverage linkage config (Task 24 — P1, disabled by default). */
+  coverage?: CoverageConfig;
 }
 
 // ---------------------------------------------------------------------------
