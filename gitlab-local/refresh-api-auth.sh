@@ -34,11 +34,16 @@ rescue => e
 end
 RUBY
 
-docker exec -i gitlab sh -c 'cat > /tmp/sdlc_harness_token_runner.rb' < "$RUNNER_FILE"
-docker exec gitlab gitlab-rails runner /tmp/sdlc_harness_token_runner.rb >/dev/null
-docker exec gitlab rm -f /tmp/sdlc_harness_token_runner.rb
-docker exec gitlab cat /tmp/sdlc_harness_runtime_token > "$TOKEN_FILE"
-docker exec gitlab rm -f /tmp/sdlc_harness_runtime_token
+# MSYS_NO_PATHCONV=1 prevents Git Bash on Windows from translating these /tmp/...
+# container paths to Windows host paths when passed as docker exec arguments (same
+# fix already applied in seed.sh for the identical pattern) — without it, GitLab's
+# Rails runner fails with "The file C:/Users/.../Temp/....rb could not be found"
+# because the path never reaches the container as a Linux path at all.
+MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c 'cat > /tmp/sdlc_harness_token_runner.rb' < "$RUNNER_FILE"
+MSYS_NO_PATHCONV=1 docker exec gitlab gitlab-rails runner /tmp/sdlc_harness_token_runner.rb >/dev/null
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/sdlc_harness_token_runner.rb
+MSYS_NO_PATHCONV=1 docker exec gitlab cat /tmp/sdlc_harness_runtime_token > "$TOKEN_FILE"
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/sdlc_harness_runtime_token
 chmod 600 "$TOKEN_FILE"
 
 TOKEN="$(tr -d '\r\n' < "$TOKEN_FILE")"
