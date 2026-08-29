@@ -25,6 +25,15 @@ the governance work.
 
 ## Running the demo
 
+> **Windows users:** run every command below in **Git Bash** (installed with Git for
+> Windows), not WSL or PowerShell. If you also have WSL installed, plain `bash` may
+> resolve to `C:\Windows\System32\bash.exe` (the WSL launcher) instead of Git Bash —
+> check with `where bash`; Git Bash's path should contain `Program Files\Git`. If it
+> resolves to WSL, invoke Git Bash explicitly, e.g.
+> `"C:\Program Files\Git\bin\bash.exe" bob-kit/mcp-server/install.sh`. WSL is a separate
+> Linux environment with its own PATH, so tools installed on your Windows host (Node.js,
+> Docker Desktop) may appear "not installed" there even when they're present on Windows.
+
 1. Start the GitLab stack:
    ```bash
    cd gitlab-local

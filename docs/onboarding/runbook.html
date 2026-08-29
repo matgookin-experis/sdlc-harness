@@ -34,6 +34,9 @@
       repository and are in its root directory.</label></li>
       <li><label><input type="checkbox"> You have IBM Bob installed and can open
       it.</label></li>
+      <li><label><input type="checkbox"> (Windows only) Confirmed <code>bash</code>
+      resolves to Git Bash, not WSL — run <code>where bash</code>; the path should
+      contain <code>Program Files\Git</code>, not <code>System32</code>.</label></li>
     </ul>
   </blockquote>
 
@@ -224,7 +227,7 @@ What would you like to do?
     <tbody>
       <tr><td><code>smoke.sh</code> fails with HTTP 502</td><td>GitLab is still starting, wait 2 min and retry</td></tr>
       <tr><td><code>seed.sh</code> fails with "Could not create API token"</td><td>GitLab is not fully up, wait and retry</td></tr>
-      <tr><td><code>install.sh</code> fails: "node is not installed"</td><td>Install Node.js ≥ 18 (<code>nvm install 18</code> or package manager)</td></tr>
+      <tr><td><code>install.sh</code> fails: "node is not installed"</td><td>Either Node.js ≥18 is genuinely missing, <strong>or</strong> (Windows) <code>bash</code> resolved to WSL instead of Git Bash — WSL has its own separate Node install (or none). Run <code>where bash</code> to check; if it points to <code>System32</code>, invoke Git Bash directly: <code>"C:\Program Files\Git\bin\bash.exe" bob-kit/mcp-server/install.sh</code></td></tr>
       <tr><td>Bob doesn't show <code>🔧 SDLC Harness</code> mode</td><td>Restart Bob; check <code>~/.bob/settings/custom_modes.yaml</code> contains <code>sdlc-harness</code></td></tr>
       <tr><td>MCP live smoke fails: "Unauthorized"</td><td>Check <code>GITLAB_TOKEN</code> in <code>bob-kit/mcp-server/.env</code>; recreate the PAT if expired</td></tr>
       <tr><td><code>.sdlc-harness.json</code> not created after onboarding</td><td>The skill config persistence requires the onboarding flow to complete all four questions</td></tr>
