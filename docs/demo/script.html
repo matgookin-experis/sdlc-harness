@@ -41,6 +41,10 @@
     <li>Delete <code>sdlc-harness-telemetry.jsonl</code> in the repo root if it exists
     (gitignored, not touched by <code>reset</code>). The Beat 4 acceptance-rate numbers
     below assume a clean file.</li>
+    <li>Delete <code>.sdlc-harness.json</code> in the repo root if it exists (gitignored,
+    not touched by <code>reset</code>). Without this, Step 2's onboarding conversation
+    is skipped on any re-take — Bob finds the existing config and jumps straight to the
+    governance action menu.</li>
     <li>Confirm Bob's WatsonX provider is actually active (Settings → Providers →
     WatsonX, model <code>ibm/granite-3-3-8b-instruct</code>), not a fallback
     provider.</li>
