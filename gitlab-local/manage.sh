@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 usage() {
-  echo "Usage: $0 {start|stop|restart|seed|seed-issues|password|logs|status}"
+  echo "Usage: $0 {start|stop|restart|seed|seed-issues|reset|password|logs|status}"
   exit 1
 }
 
@@ -30,6 +30,41 @@ case "${1:-}" in
   seed-issues)
     echo "Seeding demo issues..."
     bash "$SCRIPT_DIR/seed-issues.sh"
+    ;;
+  reset)
+    # Idempotent full reset: wipe all GitLab data, boot fresh, wait for health,
+    # reseed group/user/project + demo issues. Same commands as the "Full
+    # Reset" section in README.md, wrapped into one so demo re-takes are cheap.
+    if [ "${2:-}" != "-y" ] && [ "${2:-}" != "--yes" ]; then
+      read -r -p "This will DELETE all GitLab data (volumes) and reseed from scratch. Continue? [y/N] " confirm
+      case "$confirm" in
+        y|Y|yes|YES) ;;
+        *) echo "Aborted."; exit 1 ;;
+      esac
+    fi
+    echo "Tearing down (including volumes)..."
+    docker compose down -v
+    echo "Starting fresh..."
+    docker compose up -d
+    echo "Waiting for GitLab to be healthy..."
+    for i in $(seq 1 40); do
+      status=$(docker inspect --format='{{.State.Health.Status}}' gitlab 2>/dev/null || echo "")
+      if [ "$status" = "healthy" ]; then
+        echo "GitLab is healthy."
+        break
+      fi
+      echo "  [$i/40] health=$status — retrying in 15s..."
+      sleep 15
+      if [ "$i" -eq 40 ]; then
+        echo "ERROR: GitLab did not become healthy in time."
+        exit 1
+      fi
+    done
+    echo "Reseeding..."
+    bash "$SCRIPT_DIR/seed.sh"
+    bash "$SCRIPT_DIR/seed-issues.sh"
+    echo ""
+    echo "Reset complete — stack is back to a known, fully-seeded state."
     ;;
   password)
     echo "Initial root password:"

@@ -85,10 +85,11 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 | `./manage.sh restart`         | Restart the stack                                     |
 | `./manage.sh seed`            | Seed demo users, group, and project                   |
 | `./manage.sh seed-issues`     | Seed 12 intentionally-incomplete issues for agent demo|
+| `./manage.sh reset [-y]`      | Full wipe + fresh boot + reseed in one command (see Full Reset below) |
 | `./manage.sh logs`            | Tail container logs                                   |
 | `./manage.sh status`          | Show container health                                 |
 
-The seed script is **idempotent** — safe to run multiple times, skips anything that already exists.
+All seed scripts are **idempotent** — safe to run multiple times, skip anything that already exists.
 
 ## Ports
 
@@ -113,10 +114,20 @@ All GitLab data is stored in named Docker volumes:
 
 ## Full Reset
 
-To wipe all data and start fresh (e.g. for a clean demo):
+To wipe all data and start fresh (e.g. for a clean demo re-take):
+
+```bash
+./manage.sh reset          # prompts for confirmation
+./manage.sh reset -y       # skips the confirmation prompt
+```
+
+This tears down the stack including volumes, boots fresh, waits for GitLab to report
+`healthy`, then re-runs `seed` and `seed-issues` — a single idempotent command instead
+of four manual steps. Equivalent to running by hand:
 
 ```bash
 docker compose down -v
 docker compose up -d
 ./manage.sh seed
+./manage.sh seed-issues
 ```
