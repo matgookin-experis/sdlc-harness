@@ -19,7 +19,7 @@ the governance work.
 |---|---|
 | `gitlab-local/` | Docker stack (GitLab CE + nginx demo site) and all the scripts to start, seed, and reset it. |
 | `weather-app/` | The demo artefact under governance — plain HTML/CSS/JS, no build step. |
-| `bob-kit/` | The Bob skill, MCP server, and config templates that implement sdlc-harness. Templates only; see "Installing the Bob skill" below. |
+| `bob-kit/` | Installable source and templates for the Bob skill, MCP server, rules, and mode. See "Installing the Bob skill" below. |
 | `docs/` | Project documentation as self-contained HTML (`docs/index.html` is the entry point). |
 | `bob-sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
 
@@ -36,43 +36,64 @@ the governance work.
 
 1. Start the GitLab stack:
    ```bash
-   cd gitlab-local
-   cp .env.example .env   # set GITLAB_ROOT_PASSWORD
-   ./manage.sh start        # first boot takes 3-5 minutes; blocks until healthy or fails
-   ./manage.sh seed         # creates the demo group, user, and project
-   ./manage.sh seed-issues  # seeds 12 intentionally incomplete issues for the agents to act on
+   install -m 600 gitlab-local/.env.example gitlab-local/.env
+   # Set distinct GITLAB_ROOT_PASSWORD and GITLAB_DEMO_PASSWORD values.
+   ./gitlab-local/manage.sh start
    ```
+   `start` waits for the host-facing GitLab sign-in page, internal readiness, and the
+   demo site, then runs the complete idempotent seed. `restart` performs the same checks
+   and seed reconciliation. Use `./gitlab-local/manage.sh seed` to reconcile explicitly.
    Full details, including minimum host requirements and the ports each service uses, are
    in [gitlab-local/README.md](gitlab-local/README.md). To wipe and reseed at any point,
-   run `./manage.sh reset`.
+   run `./gitlab-local/manage.sh reset`.
 
 2. Install the Bob skill (one-time, per machine):
    ```bash
    bash bob-kit/mcp-server/install.sh
    ```
-   This builds the MCP server, merges the sdlc-harness mode and MCP registration into your
-   Bob config without touching anything else you've configured, and runs a smoke test. See
+   This builds and tests the skill and MCP server, merges the sdlc-harness mode and MCP
+   registration without touching unrelated Bob configuration, and runs a smoke test. See
    [bob-kit/README.md](bob-kit/README.md) for the manual steps if you'd rather not run the
-   installer, including how to point Bob's WatsonX provider at
-   `ibm/granite-3-3-8b-instruct`.
+   installer.
+
+   Bob uses its built-in model; there is no provider or model setup for this skill. The
+   skill controls when generation is invoked, not which model runs it. It invokes
+   generation for acceptance-criteria and ambiguity prose (and full-audit summarization),
+   while dependency, transition, and coverage detection are deterministic.
 
 3. Give the MCP server your GitLab credentials. It's a `stdio` server that Bob spawns
    itself (no separate process to run) — but it exits immediately if these are missing,
    which shows up in Bob as `Disconnected` with no further explanation. Add the following
-   to the **repo-root** `.env` (a different file from `gitlab-local/.env` used in step 1 —
-   merge into it, don't overwrite it, if it already exists for something else, e.g. a
-   WatsonX API key):
+   to the **repository-root** `.env` (a different file from `gitlab-local/.env` used in
+   step 1). Create it with owner-only permissions, or merge these values into an existing
+   file and run `chmod 600 .env`:
    ```bash
+   install -m 600 bob-kit/mcp-server/.env.example .env
+   ```
+   ```dotenv
    GITLAB_HOST=http://localhost:8080
    GITLAB_PROJECT=sdlc-harness/weather-dashboard
    GITLAB_TOKEN=<from ./gitlab-local/manage.sh refresh-token, or a GitLab PAT>
    ```
+   `./gitlab-local/manage.sh refresh-token` can mint, store, and verify the demo user's
+   token without displaying it.
    Then restart Bob (or reconnect the `sdlc-harness` server from Bob's MCP settings panel).
 
 4. In Bob, switch to the `🔧 SDLC Harness` mode and say something like `govern my backlog`.
    The skill walks through a short onboarding conversation the first time, then runs the
-   agents against the seeded issues. The full onboarding runbook is in
+   agents against the seeded issues. Audits are read-only; each finding then enters an
+   apply/edit/skip/reject review loop, and only apply or edit can write through the guarded
+   review runtime. The full onboarding runbook is in
    [docs/onboarding/runbook.html](docs/onboarding/runbook.html).
+
+## Maintenance
+
+- Rotate the local API token with `./gitlab-local/manage.sh refresh-token`.
+- Remove only the installed Bob skill, rule, mode, MCP registration, and build artifacts
+  with `bash bob-kit/mcp-server/uninstall.sh`.
+- Return the whole demo to a freshly cloned state with
+  `./gitlab-local/manage.sh uninstall`; this also deletes Docker volumes, local `.env`
+  files, onboarding state, and telemetry, so it prompts before proceeding.
 
 ## Security
 
@@ -81,9 +102,9 @@ keep credentials out of git history:
 
 - `.gitignore` and `.bobignore` exclude every `.env` file and anything that looks like a
   credential, key, or secret by name.
-- Each part of the stack that needs credentials (`gitlab-local/`, `bob-kit/mcp-server/`,
-  and the repo root) has its own `.env.example` to copy from. Copy it, fill in real values
-  in the `.env` it produces, and never commit that file.
+- Each part of the stack that needs credentials has an `.env.example`. Create local
+  `.env` files with mode `0600` (`install -m 600 ...`) and never commit them. The GitLab
+  root and demo accounts must use separate passwords.
 - Before pushing, check `git diff` for anything that shouldn't be there and confirm `.env`
   isn't staged (`git status`).
 

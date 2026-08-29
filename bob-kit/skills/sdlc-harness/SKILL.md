@@ -32,12 +32,32 @@ scanning for dependency overlap (Task 22) or monitoring state (Task 23). If the
 user wants to govern a different project, they must re-run onboarding to
 reconfigure scope — the skill does not infer or expand scope on its own.
 
+Every live command requires a valid `.sdlc-harness.json`, or the path named by
+`SDLC_PROJECT_CONFIG`. The GitLab host and full project path are derived only from
+`projectUrl`. If `GITLAB_HOST` or `GITLAB_PROJECT` is present in the process environment or
+selected `.env`, it must match onboarding exactly; a mismatch or missing config stops the
+operation. There is no ambient-project fallback.
+
 ---
 
 ## Phase 1 — Onboarding (Task 18)
 
-Check whether the project has already been onboarded by looking for a `.sdlc-harness.json`
-config in the repo root.
+### Install the runtime
+
+`dist/` is generated and is not committed. After copying the bob-kit skill, install and
+build it at its installed location before running any command:
+
+```bash
+SDLC_HARNESS_SKILL="$HOME/.bob/skills/sdlc-harness"
+npm --prefix "$SDLC_HARNESS_SKILL" run install:skill
+```
+
+`install:skill` runs the checked-in `install.sh`, which performs a clean `npm ci` and
+TypeScript build relative to the installed skill directory. Re-run it after updating the
+installed skill.
+
+Check whether the project has already been onboarded by looking for a valid
+`.sdlc-harness.json` config in the repo root.
 
 - **Not onboarded:** Run the onboarding conversation below.
 - **Already onboarded:** Load the config and proceed to Phase 3.
@@ -53,8 +73,21 @@ Ask the user:
 5. Does the GitLab tier support blocking issue links? Leave `blockingIssueLinks` false for
    the local GitLab CE demo; enable it only for a confirmed Premium/Ultimate project.
 
-Save answers to `.sdlc-harness.json` in the repo root using the `ProjectConfig` schema
-defined in `bob-kit/skills/sdlc-harness/src/models.ts`.
+Put the answers in an onboarding input file, then invoke the installed CLI from the project
+repo root:
+
+```bash
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" onboard <onboarding-input.json>
+```
+
+The command validates and atomically writes `.sdlc-harness.json`. It always persists
+`"provider": "gitlab"`, validates `projectUrl` with `URL`, rejects credentials, query
+parameters, and fragments, and requires a namespace/project path. Names and transition
+targets are trimmed and deduplicated; every transition must be a direct edge between
+configured states. Common state names are inferred only when each concept resolves
+unambiguously. Otherwise onboarding requires `stateMapping` entries for `open`,
+`inProgress`, `inReview`, and `done`. Set `SDLC_PROJECT_CONFIG` only when the authoritative
+config belongs at an explicit alternate path.
 
 ---
 
@@ -68,9 +101,19 @@ type rather than duplicated in this file or in the agent code.
 
 ## Phase 3 — Agent Monitoring (Tasks 20–24)
 
-Agents run on demand (user triggers an Audit or a targeted action) and produce
-`AgentFinding` or `DependencyFinding` objects (see `src/models.ts`). Each finding
-is surfaced for human review (Phase 4) before any write occurs.
+Run the compiled, read-only controller from the repo root:
+
+```bash
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" audit
+```
+
+The controller fetches open issues and project merge requests through the scoped REST
+reader, runs AC, ambiguity, dependency, and state agents, and runs coverage only when it is
+enabled. It returns structured JSON containing `timestamp`, scope, issues, stable finding
+IDs, and per-issue review groups with conflict reasons. Audit makes GET requests only and
+never writes to GitLab. HTTP calls time out after 15 seconds. Reads fail rather than
+truncate after 5 pages or 500 items, and MR queries are limited to the preceding 90 days.
+Each finding is surfaced for human review before any later write.
 
 ### Governance action menu
 
@@ -93,12 +136,25 @@ When the user asks to govern issues, present these options:
 | AM | Ambiguity detection | Issues with vague or contradictory descriptions |
 | DEP | Dependency suggestion | Issues that likely block or relate to each other |
 | ST | State-transition | Issues whose GitLab state is stale relative to activity |
-| TC *(P1)* | Test-coverage linkage | Issues with no linked test file or test-plan item |
+| COV *(P1)* | Test-coverage linkage | Issues with no configured test-file reference |
 
-TC is disabled by default (seed data has no test files). To enable:
-1. Add at least one test file to `weather-app/` (e.g. `weather.test.js`).
-2. Set `"testGlob": "weather-app/**/*.test.*"` in `.sdlc-harness.json`.
-3. TC will be included in subsequent audit runs automatically.
+COV is disabled by default. To enable, set:
+
+```json
+{
+  "coverage": {
+    "enabled": true,
+    "testFilePatterns": ["weather-app/**/*.test.*"]
+  }
+}
+```
+
+Enabled coverage requires at least one nonblank repo-relative pattern. Only files matching
+`testFilePatterns` are read, and COV is then included in audit output automatically. The
+scanner supports `*`, `**`, and `?`; `.git`, `node_modules`, `dist`, and `coverage` are
+skipped unless the configured patterns name those directories explicitly. Pattern roots and
+files must be real, non-symlinked paths under the project root. A scan fails closed after
+10,000 files or when a matched file exceeds 1 MiB.
 
 ---
 
@@ -133,12 +189,12 @@ genuinely does not say enough to write a specific criterion, ask; a question is 
 to the author than a sentence that asserts nothing.
 
 **Detection rules (deterministic, no model needed):** returns `null` when the description
-contains an "Acceptance Criteria" heading, `## AC`, `## Criteria`, or structured
-Given/When/Then where each clause opens its own line. Three keywords in one line of prose
-does not count.
+contains a populated "Acceptance Criteria", `## AC`, or `## Criteria` section, or structured
+Given/When/Then where each clause opens its own line. An empty heading and three keywords in
+one line of prose do not count.
 
-**Tool calls:** `gitlab-issue-reader` to fetch issues, `work-item-format` for the template.
-Never call `gitlab-issue-writer` directly — writes go through the review interface.
+**Tool calls:** use the audit CLI to fetch scoped issues. Use `work-item-format` for the
+template while drafting. Never call a GitLab writer directly; writes go through Phase 4.
 
 ---
 
@@ -172,17 +228,17 @@ same person wrote it on a better day.
 Approving an AM finding **writes to the issue description**. That is deliberate — a rewrite
 nobody can apply is not governance.
 
-**False-positive avoidance:** returns `null` when a description is at least 80 characters
-and carries two or more specificity signals (file paths, inline code, URLs, API/endpoint/
-component/class/function references).
+**False-positive avoidance:** a description at least 80 characters long with two or more
+specificity signals may suppress soft wording findings. It never suppresses placeholders,
+non-testable defect phrases, unbounded improvement requests, or subjective presentation
+requests.
 
 **Detected patterns:** placeholders (TBD/TODO/FIXME/XXX), non-specific pronouns
-("the thing", "something", "somehow"), vague subjects ("fix it", "it doesn't work"),
-non-testable claims ("does not work"), vague quantities ("various", "several things").
-"properly" and "correctly" are deliberately absent — the AC agent's old template used them,
-and flagging its output created a loop between the two agents.
+("the thing", "some things", "something"), non-testable defects ("doesn't work well",
+"is broken"), unbounded requests ("make it better and faster"), and bounded subjective UI
+phrases ("make it look nicer", "aligned better", "colours don't look right").
 
-**Tool calls:** `gitlab-issue-reader` to fetch issues. Never writes directly.
+**Tool calls:** use the audit CLI. The agent never writes directly.
 
 ---
 
@@ -193,8 +249,8 @@ and flagging its output created a loop between the two agents.
 
 **Runtime behaviour:**
 
-1. Fetch all open issues via `gitlab-issue-reader` (action: `list-issues`, state: `opened`).
-2. Call `runDependencyAgent(issues, projectConfig)`.
+1. Run the audit CLI, which fetches open issues inside the onboarded scope.
+2. It calls `runDependencyAgent(issues, projectConfig)`.
 3. For each `DependencyFinding` returned:
    - Fields: `sourceIid`, `targetIid`, `suggestedLinkType` (`blocks` | `relates-to`),
      `reason`, `confidence` (0–1).
@@ -202,21 +258,28 @@ and flagging its output created a loop between the two agents.
 4. Guarantees: no self-links, no duplicate pairs, confidence in [0,1].
 
 **Overlap detection:** Jaccard similarity on significant keyword tokens (stop-words
-removed). Threshold: 0.12 for a finding; 0.25 for high-confidence boost.
+removed). A finding requires at least two shared tokens and 0.08 similarity; confidence is
+boosted at 0.25.
 
 **Link type and direction:**
-- `blocks` — only when `blockingIssueLinks` is true and exactly one side carries dependency language ("depends on",
-  "requires", "prerequisite", "blocks"). The side that depends on the other is the
-  target; the prerequisite side is the source.
-- `relates-to` — when blocking links are disabled, or when both/neither sides carry
-  dependency language (direction is ambiguous). The lower IID is always the source.
+- `blocks` — only when `blockingIssueLinks` is true. "A blocks B" makes A the source and B
+  the target; "A depends on B" makes B the source and A the target, but only when the
+  directional sentence identifies the counterpart or both issues provide complementary
+  blocker/dependent evidence.
+- `relates-to` — when blocking links are disabled, evidence is generic, neither role is
+  stated, both issues claim the same role, or one issue contains conflicting directional
+  language. The lower IID is the source.
 - Domain-specific heuristics (e.g. matching "/token refresh/") are intentionally
-  excluded from `BLOCKS_SIGNALS`; they produce unreliable directions on real backlogs.
+  excluded; they produce unreliable directions on real backlogs.
 
-**Write path (after approval):** call `gitlab-issue-writer` with
-`action: "create-link"`, the finding's `sourceIid`, `targetIid`, and
-`suggestedLinkType`. GitLab's `relates_to` spelling is handled inside the MCP tool.
-Never create the relationship before the user approves it.
+**Write path (after approval):** put the reviewed finding and optional edited link type in
+a decision JSON file and run `.../cli.js apply <decision.json>`. The scoped adapter maps
+`relates-to` to GitLab's `relates_to`. It validates and applies the edited link type, not the
+original suggestion. Never create the relationship before approval.
+
+The audit does not fan out an additional link-list request for every issue. GitLab's issue
+links API rejects duplicate links; that response is surfaced as a failed write and no
+additional relationship is created.
 
 ---
 
@@ -227,9 +290,9 @@ Never create the relationship before the user approves it.
 
 **Runtime behaviour:**
 
-1. For each open issue, fetch related MRs via `gitlab-mr-reader-writer` (action: `list-mrs`).
-   Match MRs by checking their `description` for `Closes #<iid>`, `Fixes #<iid>`, or the
-   issue IID appearing in the MR title. Pass the matched MRs as the `mrs` parameter.
+1. The audit CLI fetches only recently updated project MRs and accepts local `#<iid>`, the
+   exact onboarded `group/project#<iid>`, or its exact issue URL. Foreign project references
+   are ignored.
 2. Call `runStateTransitionAgent(issue, mrs, projectConfig)`.
 3. If the return value is `null`, skip — no transition warranted.
 4. If the return value is an `AgentFinding` with `agent: 'ST'`:
@@ -237,20 +300,25 @@ Never create the relationship before the user approves it.
    - Proceed to Phase 4.
 
 **Signal mapping:**
-- MR `state: 'merged'` → propose `'In Review'` (transitively reachable).
-- MR `state: 'opened'` → propose `'In Progress'` (if valid from current state).
+- MR `state: 'merged'` → move one direct edge toward the configured review state.
+- MR `state: 'opened'` → move one direct edge toward the configured in-progress state.
 - No linked MRs → `null`.
 
-**Transition validation:** Uses BFS over `config.transitionRules` to check transitive
-reachability. A transition is only proposed if the target state is reachable from the
-current state (directly or through intermediate states).
+Merged activity is ignored when it predates the query horizon or the issue's `updated_at`.
+
+**Transition validation:** Current workflow state comes from configured state labels, with
+GitLab opened/closed used only when no workflow label is present. Common names such as
+Open/Backlog, In Progress/Doing, and In Review/Review resolve automatically; custom names
+can use `stateMapping`. Path search may identify the direction of travel, but the proposed
+and applied state is always exactly one configured edge. For example, a merged MR moves
+Backlog to Doing first, then a later audit can move Doing to Review. Illegal jumps fail.
 
 **NEVER automatically changes GitLab state.** All proposals go through Phase 4.
 
-**Write path (if user accepts):** for intermediate states call
-`gitlab-issue-writer` with `action: "update-issue"`, removing the old workflow label
-and adding the target-state label. For Done call `action: "close-issue"` after updating
-the label. Use `action: "reopen-issue"` when moving a closed issue back to an active state.
+**Write path (if user accepts):** the review CLI reloads the issue, derives its current
+state from labels, and verifies the chosen target is still a direct configured edge before
+using GitLab's native `remove_labels` and `add_labels` parameters. Done closes the issue;
+moving away from Done reopens it.
 
 ---
 
@@ -265,9 +333,11 @@ Add `"coverage": { "testFilePatterns": ["**/*.test.ts"], "enabled": true }` to
 
 **Runtime behaviour:**
 
-1. Read test file contents matching the configured glob patterns.
+1. The audit controller reads only bounded, non-symlinked files matching configured
+   `testFilePatterns`.
 2. Call `runCoverageAgent(issues, testContents, projectConfig)`.
-3. Issues with no `#<iid>` or `closes #<iid>` reference in any test file are flagged.
+3. Issues with no local or exact-project reference in any test file are flagged. Numeric
+   CSS colors and foreign `group/project#iid` references do not count.
 4. Surface each finding through Phase 4.
 
 ---
@@ -310,6 +380,21 @@ Reply with:
 **Only `apply` and `edit` call the GitLab writer adapter.** `skip` and `reject` do not
 modify any GitLab data.
 
+Use the compiled bridge for review decisions:
+
+```bash
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" apply <decision.json>
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" reject <decision.json>
+```
+
+The CLI runtime-validates the finding discriminator, agent/action pairing, issue IDs,
+confidence, link type, edited value, draft shape, and required stale-write metadata.
+Description findings carry `originalDescription` and, when GitLab supplied it,
+`originalUpdatedAt`. Immediately before writing, the adapter reloads the issue and requires
+both values to match. This closes ordinary stale-review windows, but GitLab's issue update
+API has no compare-and-swap precondition, so a narrow race between the final GET and PUT is
+unavoidable.
+
 ### Conflict Detection
 
 A conflict arises when two agents produce suggestions that contradict each other on the same
@@ -318,6 +403,9 @@ issue. The two most common cases:
 - DEP suggests issue A *blocks* issue B (implying A must finish first), while ST suggests
   transitioning A to Done (implying it is already complete).
 - AM rewrites a description in a way that would invalidate AC drafted by AC in the same run.
+
+For an AC+AM conflict, apply AM first, rerun audit, then draft and apply AC from the updated
+description. Never apply the original AC finding after AM.
 
 Before presenting the review, check for overlapping `issueIid` values across all agent
 findings. Conflicting findings are grouped and flagged:
@@ -353,18 +441,18 @@ After the user handles all findings for an issue, proceed to the next issue.
 ### Writer adapter contract
 
 At runtime, `applyFinding` calls the adapter only for **writable actions**.
-The `defaultWriterAdapter` (in `gitlab-writer-adapter.ts`) performs real, project-scoped
-GitLab REST writes. It returns `written: false` when credentials are missing, the runtime
-project differs from `.sdlc-harness.json`, or GitLab rejects the operation. Pass
-`stubWriterAdapter` explicitly in isolated unit tests.
+The `defaultWriterAdapter` (in `gitlab-writer-adapter.ts`) is the real scoped REST adapter.
+It returns `written: false` when onboarding, scope checks, validation, freshness checks, or
+the GitLab request fails, so telemetry never records `accepted` for a write that did not
+land. Pass `stubWriterAdapter` explicitly only in isolated unit tests.
 
 Action-specific write semantics (for a real adapter):
 
 | `action` | Write operation | Notes |
 |---|---|---|
-| `draft_ac` | Append drafted AC to issue description | `update-issue`; refused while the finding still carries a `draft` |
-| `state_transition` | Apply scoped label swap; GitLab has only `opened`/`closed` states | `update-issue` |
-| `rewrite_desc` | Replace issue description with the drafted rewrite | `update-issue`; refused while the finding still carries a `draft` |
+| `draft_ac` | Append drafted AC to issue description | Refused when undrafted or stale |
+| `state_transition` | Use `add_labels`/`remove_labels` for workflow labels only | Preserves unrelated labels |
+| `rewrite_desc` | Replace issue prose while preserving an existing AC section | Refused when undrafted or stale |
 | `missing_coverage` | **Never written** — report only | COV findings are informational |
 | `dependency_link` | Create a GitLab issue link | `create-link`; maps `relates-to` to GitLab's `relates_to` |
 
@@ -372,18 +460,22 @@ The `sdlc-review-decision` MCP tool is the interactive review path. It delegates
 compiled review runtime, so the GitLab write and telemetry outcome stay together. Do not
 use `gitlab-issue-writer` directly for an agent review decision. The CLI bridge
 (`npm run review -- apply <decision.json>`) provides the same behaviour for terminal use.
+Both entry points use the real scoped adapter and record `accepted` or `edited` only after
+GitLab confirms the write. Failed writes are recorded as `failed`. A telemetry failure is
+returned as `telemetryRecorded: false` plus a warning and never changes a successful
+`gitlabWriteSucceeded` result.
 
 ---
 
 ## Phase 5 — Suggestion Telemetry (Task 26)
 
 **Module:** `bob-kit/skills/sdlc-harness/src/skill/telemetry.ts`
-**File:** `sdlc-harness-telemetry.jsonl` (in the working directory; gitignored)
+**File:** `sdlc-harness-telemetry.jsonl` beside the selected project config (gitignored)
 
 ### Logged events
 
-One JSON object is appended per **accepted**, **edited**, or **rejected** decision.
-**Skip is neutral and NOT logged.**
+One JSON object is appended per **accepted**, **edited**, **rejected**, or **failed**
+decision. **Skip is neutral and NOT logged.**
 
 **Schema (one object per line):**
 ```json
@@ -405,13 +497,12 @@ One JSON object is appended per **accepted**, **edited**, or **rejected** decisi
 
 ### Telemetry
 
-Every apply / edit / reject outcome is appended to `sdlc-harness-telemetry.jsonl` in the
-repo root (append-only, never overwritten). The file is gitignored and contains no issue
-content — only metadata.
+Every apply / edit / reject outcome is appended to the selected project's telemetry file
+(append-only, never overwritten). The file contains no issue content, only metadata.
 
 ```jsonc
 {
-  "ts": "2025-09-01T14:32:10Z",
+  "timestamp": "2025-09-01T14:32:10.000Z",
   "agent": "AC",
   "issueIid": 12,
   "action": "draft_ac",
@@ -420,9 +511,9 @@ content — only metadata.
 }
 ```
 
-The acceptance rate (`accepted / (accepted + rejected)`) is the primary trust metric for the demo.
-Note: `"failed"` outcomes (write attempted but adapter returned `written: false`) are excluded
-from both the numerator and denominator of all rate calculations.
+The acceptance rate is consistently defined as
+`accepted / (accepted + edited + rejected)`. `failed` outcomes are excluded from both the
+numerator and denominator because the requested write did not complete.
 
 ### Acceptance-rate summary
 
@@ -435,31 +526,37 @@ Edited:          N  (N%)
 Rejected:        N  (N%)
 Failed:          N  (write did not reach GitLab — excluded from rates)
 Acceptance rate: N%     (accepted / total)
-Approval rate:   N%     (accepted + edited) / total
 ```
 
 Present this summary when the user asks "how are we doing?" or at the end of an Audit.
 
 ### Environment override
 
-Set `SDLC_TELEMETRY_PATH` env var to redirect the telemetry file (used in tests).
+Set `SDLC_TELEMETRY_PATH` to explicitly redirect the telemetry file (used in tests).
 
 ---
 
-## MCP Tools available to this skill
+## Runtime boundaries
 
-The following MCP tools are registered by the sdlc-harness GitLab MCP server (Section 2A).
-Use them when calling GitLab on the user's behalf:
+The built CLI owns the authoritative live audit and review runtime so its scope checks cannot
+be skipped. `audit` is read-only, `apply` is the only CLI command that mutates GitLab, and
+`reject` and `summary` do not contact GitLab. The `sdlc-review-decision` MCP tool is the
+interactive review entry point and must delegate to the same compiled apply/reject runtime.
+Do not use the generic GitLab writer for an agent review decision.
+
+The MCP server exposes these related tools:
 
 | Tool | Purpose |
 |------|---------|
-| `gitlab-issue-reader` | Read issues, labels, and current state |
-| `gitlab-issue-writer` | Create / update issues, add notes, change state |
+| `gitlab-issue-reader` | Ordinary issue reads outside the harness audit |
+| `gitlab-issue-writer` | Ordinary issue maintenance, not review decisions |
 | `sdlc-review-decision` | Apply/reject agent findings and report telemetry metrics |
-| `gitlab-mr-reader-writer` | Read MRs (state-transition signal), write MR notes |
+| `gitlab-mr-reader-writer` | Ordinary MR reads and notes outside the harness audit |
 | `work-item-format` | Canonical formatting standard for titles, descriptions, AC |
 
 _Tools are not available until the MCP server (Tasks 7–16) is running and registered (Task 29)._
+Use `work-item-format` only to draft text from an audit finding; it does not select or mutate
+the GitLab project.
 
 ---
 
@@ -467,22 +564,32 @@ _Tools are not available until the MCP server (Tasks 7–16) is running and regi
 
 ```
 bob-kit/skills/sdlc-harness/
+├── install.sh                             — clean installed-skill dependency/build step
 ├── package.json                          — test runner (Jest + ts-jest)
 ├── tsconfig.json                         — TypeScript (commonjs, strict)
 ├── src/
+│   ├── cli.ts                            — onboard / audit / review / summary commands
 │   ├── models.ts                         — shared types (ProjectConfig, AgentFinding, …)
 │   ├── index.ts                          — barrel export
 │   ├── agents/
 │   │   ├── ac-agent.ts                   — Task 20: AC detection + GWT drafting
 │   │   ├── ambiguity-agent.ts            — Task 21: vague-language detection + rewrite
 │   │   ├── dependency-agent.ts           — Task 22: Jaccard overlap → blocks/relates-to
-│   │   ├── state-transition-agent.ts     — Task 23: MR signal → state proposal (BFS)
+│   │   ├── state-transition-agent.ts     — Task 23: MR signal → direct state edge
 │   │   └── coverage-agent.ts             — Task 24 (P1): test-file ref extraction
 │   └── skill/
-│       ├── onboard.ts                    — Task 18: config validation
+│       ├── audit.ts                      — scoped read-only audit controller
+│       ├── cli-controller.ts             — testable command dispatch
+│       ├── gitlab-reader-adapter.ts      — project-scoped GitLab reads
+│       ├── gitlab-rest.ts                — scoped request and redirect guard
+│       ├── gitlab-runtime.ts             — config / environment scope enforcement
+│       ├── onboard.ts                    — Task 18: validation + atomic persistence
+│       ├── review-payload.ts             — untrusted CLI payload validation
 │       ├── review.ts                     — Task 25: apply / reject / conflict tracking
 │       ├── telemetry.ts                  — Task 26: JSONL append, acceptance-rate
-│       └── gitlab-writer-adapter.ts      — adapter boundary for MCP write calls
+│       └── gitlab-writer-adapter.ts      — scoped, guarded GitLab writes
 └── tests/
-    └── skill.test.ts                     — 76 tests covering Tasks 18–26
+    ├── hardening.test.ts                 — filesystem, HTTP, scope, and concurrency bounds
+    ├── skill.test.ts                     — core behavior tests
+    └── regressions.test.ts               — audited-gap regression tests
 ```

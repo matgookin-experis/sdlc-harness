@@ -11,11 +11,21 @@ import type { IssueInput, ProjectConfig, AgentFinding, DraftBrief } from '../mod
  */
 const VAGUE_PATTERNS: Array<{ label: string; re: RegExp }> = [
   { label: 'placeholder', re: /\b(tbd|todo|fixme|placeholder|xxx)\b/i },
-  { label: 'non-specific pronoun', re: /\b(the\s+thing|the\s+stuff|something|somehow|some\s+way)\b/i },
+  { label: 'non-specific pronoun', re: /\b(the\s+thing|the\s+stuff|some\s+things|something|somehow|some\s+way)\b/i },
   { label: 'vague subject', re: /\b(it\s+(?:doesn'?t|does\s+not|isn'?t|is\s+not)\s+work|fix\s+it)\b/i },
-  { label: 'non-testable claim', re: /\b(?:does\s+not|doesn'?t)\s+work\b/i },
+  { label: 'non-testable defect', re: /\b(?:(?:does\s+not|doesn'?t)\s+work(?:\s+well)?|(?:is|are|seems?)\s+broken)\b/i },
+  { label: 'unbounded improvement', re: /\bmake\s+(?:it|this|them)\s+(?:look\s+)?(?:better|faster|nicer)(?:\s+and\s+(?:better|faster|nicer|more\s+professional))*\b/i },
+  { label: 'subjective presentation', re: /\b(?:looks?\s+(?:a\s+bit\s+)?cluttered|aligned\s+better|colou?rs?\s+(?:do\s+not|don'?t)\s+look\s+right)\b/i },
   { label: 'vague quantity', re: /\b(various|several\s+things|many\s+things|some\s+issues|a\s+few\s+things)\b/i },
 ];
+
+const NON_EXEMPT_LABELS = new Set([
+  'placeholder',
+  'vague subject',
+  'non-testable defect',
+  'unbounded improvement',
+  'subjective presentation',
+]);
 
 /**
  * Signals that an author has already been specific. Two or more of these in a
@@ -94,10 +104,10 @@ export async function runAmbiguityAgent(
   _config: ProjectConfig
 ): Promise<AgentFinding | null> {
   const desc = issue.description ?? '';
-  if (isConcreteEnough(desc)) return null;
-
-  const flags = findVaguePhrases(`${issue.title} ${desc}`);
+  const flags = findVaguePhrases(desc);
   if (flags.length === 0) return null;
+  const hasNonExemptFlag = flags.some((flag) => NON_EXEMPT_LABELS.has(flag.label));
+  if (!hasNonExemptFlag && isConcreteEnough(desc)) return null;
 
   const summary = flags.map((f) => `"${f.phrase}"`).join(', ');
 
@@ -108,5 +118,7 @@ export async function runAmbiguityAgent(
     suggestedValue: `Description not yet rewritten for "${issue.title}".`,
     draft: buildBrief(issue, flags),
     reason: `Vague wording that cannot be tested against: ${summary}.`,
+    originalDescription: issue.description,
+    ...(issue.updatedAt === undefined ? {} : { originalUpdatedAt: issue.updatedAt }),
   };
 }

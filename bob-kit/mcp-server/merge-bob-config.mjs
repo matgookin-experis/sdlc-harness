@@ -5,10 +5,12 @@
  */
 
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -39,9 +41,11 @@ function ensureDir(path) {
 function atomicWrite(path, content) {
   ensureDir(dirname(path));
   const tempPath = `${path}.${process.pid}.${Date.now()}.tmp`;
+  const mode = existsSync(path) ? statSync(path).mode & 0o600 : 0o600;
 
   try {
-    writeFileSync(tempPath, content, 'utf-8');
+    writeFileSync(tempPath, content, { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(tempPath, mode);
     renameSync(tempPath, path);
   } catch (error) {
     if (existsSync(tempPath)) {
@@ -138,7 +142,8 @@ function prepareMcpJson(projectRoot, bobDir = DEFAULT_BOB_DIR) {
     command: 'node',
     args: [join(projectRoot, 'bob-kit', 'mcp-server', 'dist', 'index.js')],
     env: {
-      SDLC_ENV_FILE: join(projectRoot, '.env'),
+      SDLC_ENV_FILE: resolve(projectRoot, '.env'),
+      SDLC_PROJECT_CONFIG: resolve(projectRoot, '.sdlc-harness.json'),
     },
   };
   const merged = {

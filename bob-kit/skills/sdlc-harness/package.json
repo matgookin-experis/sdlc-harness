@@ -7,13 +7,16 @@
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
   "bin": {
+    "sdlc-harness": "dist/src/cli.js",
     "sdlc-harness-review": "dist/src/cli.js"
   },
   "scripts": {
+    "install:skill": "bash ./install.sh",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "test": "jest --runInBand",
     "test:coverage": "jest --runInBand --coverage",
+    "cli": "node dist/src/cli.js",
     "review": "node dist/src/cli.js",
     "test:live": "node dist/src/live-review-smoke.js"
   },

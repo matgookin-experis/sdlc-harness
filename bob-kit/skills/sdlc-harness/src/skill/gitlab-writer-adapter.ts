@@ -1,13 +1,15 @@
-/**
- * Concrete GitLab writer used by the human-review workflow.
- *
- * It reads the same GITLAB_HOST / GITLAB_PROJECT / GITLAB_TOKEN settings as
- * the MCP server. All writes remain locked to that configured project.
- */
+/** Concrete project-scoped GitLab writer used by the human-review workflow. */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import type { AnyFinding, DependencyFinding, ProjectConfig } from '../models';
+import type { AgentFinding, AnyFinding, DependencyFinding } from '../models';
+import {
+  deriveCurrentWorkflowState,
+  isDirectTransition,
+  resolveStateForConcept,
+} from '../agents/state-transition-agent';
+import { createGitLabRequest, safeGitLabError } from './gitlab-rest';
+import type { FetchFn } from './gitlab-rest';
+import { loadGitLabRuntimeConfig } from './gitlab-runtime';
+import type { GitLabRuntimeConfig } from './gitlab-runtime';
 
 export interface GitLabWriteResult {
   /** True only when GitLab returned a successful response. */
@@ -21,130 +23,38 @@ export interface GitLabWriteResult {
 export interface GitLabWriterAdapter {
   applyFindingToGitLab(
     finding: AnyFinding,
-    valueToWrite: string
+    valueToWrite: string,
   ): Promise<GitLabWriteResult>;
-}
-
-interface RuntimeConfig {
-  host: string;
-  project: string;
-  token: string;
-  workflowStates: string[];
-  blockingIssueLinks?: boolean;
-  scopeError?: string;
 }
 
 interface GitLabIssueResponse {
   description: string | null;
   labels: string[];
   state: 'opened' | 'closed';
+  updated_at?: string;
 }
 
-type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
+interface GitLabIssueLinkResponse {
+  link_type: 'relates_to' | 'blocks' | 'is_blocked_by';
+  iid: number;
+  project_id: number;
+}
 
+/** Identify dependency findings without relying on optional property presence. */
 function isDependencyFinding(finding: AnyFinding): finding is DependencyFinding {
-  return (finding as DependencyFinding).sourceIid !== undefined;
+  return finding.agent === 'DEP';
 }
 
-function parseEnvFile(filePath: string): Record<string, string> {
-  if (!fs.existsSync(filePath)) return {};
-  const values: Record<string, string> = {};
-  for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separator = trimmed.indexOf('=');
-    if (separator < 1) continue;
-    const key = trimmed.slice(0, separator).trim();
-    let value = trimmed.slice(separator + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    values[key] = value;
-  }
-  return values;
-}
-
-function findUp(relativePath: string, startDirectory = process.cwd()): string | null {
-  let directory = path.resolve(startDirectory);
-  for (;;) {
-    const candidate = path.join(directory, relativePath);
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(directory);
-    if (parent === directory) return null;
-    directory = parent;
-  }
-}
-
-function findEnvFile(): string | null {
-  const candidates = [
-    process.env['SDLC_ENV_FILE'],
-    findUp('.env'),
-    findUp(path.join('bob-kit', 'mcp-server', '.env')),
-  ].filter((candidate): candidate is string => Boolean(candidate));
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
-}
-
-function loadProjectConfig(): ProjectConfig | null {
-  const configPath = process.env['SDLC_PROJECT_CONFIG'] ?? findUp('.sdlc-harness.json');
-  if (!configPath) return null;
-  try {
-    return JSON.parse(fs.readFileSync(configPath, 'utf8')) as ProjectConfig;
-  } catch {
-    return null;
-  }
-}
-
-function normaliseProjectUrl(value: string): string {
-  const parsed = new URL(value);
-  const pathName = parsed.pathname.replace(/\.git\/?$/, '').replace(/\/$/, '');
-  return `${parsed.origin}${pathName}`.toLowerCase();
-}
-
-function loadRuntimeConfig(): RuntimeConfig | null {
-  const filePath = findEnvFile();
-  const fileValues = filePath ? parseEnvFile(filePath) : {};
-  const host = process.env['GITLAB_HOST'] ?? fileValues['GITLAB_HOST'];
-  const project = process.env['GITLAB_PROJECT'] ?? fileValues['GITLAB_PROJECT'];
-  const token = process.env['GITLAB_TOKEN'] ?? fileValues['GITLAB_TOKEN'];
-  if (!host || !project || !token) return null;
-  const projectConfig = loadProjectConfig();
-  let scopeError: string | undefined;
-  if (!projectConfig) {
-    scopeError = 'Project is not onboarded. Create .sdlc-harness.json before writing to GitLab.';
-  } else {
-    try {
-      const runtimeProjectUrl = normaliseProjectUrl(`${host.replace(/\/$/, '')}/${project}`);
-      const onboardedProjectUrl = normaliseProjectUrl(projectConfig.projectUrl);
-      if (runtimeProjectUrl !== onboardedProjectUrl) {
-        scopeError =
-          'Configured GitLab project does not match the onboarded project. ' +
-          'Update GITLAB_HOST/GITLAB_PROJECT or re-run onboarding.';
-      }
-    } catch {
-      scopeError = 'The onboarded GitLab project URL is invalid.';
-    }
-  }
-  return {
-    host: host.replace(/\/$/, ''),
-    project,
-    token,
-    workflowStates: projectConfig?.workflowStates ?? [],
-    blockingIssueLinks: projectConfig?.blockingIssueLinks === true,
-    scopeError,
-  };
-}
-
+/** Append criteria under a heading unless the drafted value already has one. */
 function acceptanceCriteriaDescription(current: string | null, criteria: string): string {
   const base = (current ?? '').trimEnd();
-  const heading = /^#{1,6}\s+(acceptance criteria|ac|criteria)\s*$/im.test(criteria)
-    ? ''
-    : '## Acceptance Criteria\n';
+  const hasHeading = /^\s{0,3}(?:#{1,6}\s+|\*\*\s*)?(?:acceptance criteria|ac|criteria)(?:\s*\*\*)?\s*:?\s*$/im
+    .test(criteria);
+  const heading = hasHeading ? '' : '## Acceptance Criteria\n';
   return `${base}${base ? '\n\n' : ''}${heading}${criteria.trim()}`;
 }
 
+/** Extract an existing acceptance-criteria section so rewrites cannot discard it. */
 function extractAcceptanceCriteria(description: string | null): string | null {
   if (!description) return null;
   const heading = /^\s*(?:(#{1,6})\s+|\*\*)(acceptance criteria|ac|criteria)(?:\*\*)?\s*$/im.exec(description);
@@ -160,9 +70,11 @@ function extractAcceptanceCriteria(description: string | null): string | null {
   return description.slice(heading.index, end).trim();
 }
 
+/** Replace prose while retaining any existing acceptance-criteria section. */
 function ambiguityRewriteDescription(current: string | null, rewrite: string): string {
   const replacement = rewrite.trim();
-  if (/^#{1,6}\s+(acceptance criteria|ac|criteria)\s*$/im.test(replacement)) {
+  if (/^\s{0,3}(?:#{1,6}\s+|\*\*\s*)?(?:acceptance criteria|ac|criteria)(?:\s*\*\*)?\s*:?\s*$/im
+    .test(replacement)) {
     return replacement;
   }
   const existingCriteria = extractAcceptanceCriteria(current);
@@ -171,77 +83,84 @@ function ambiguityRewriteDescription(current: string | null, rewrite: string): s
     : replacement;
 }
 
-function safeError(error: unknown): string {
-  return error instanceof Error
-    ? error.message.replace(/PRIVATE-TOKEN[^\s]*/gi, '[credential]')
-    : 'GitLab write failed';
+/** Return a configured state using case-insensitive input matching. */
+function canonicalState(value: string, config: GitLabRuntimeConfig): string | null {
+  return config.projectConfig.workflowStates.find(
+    (state) => state.toLowerCase() === value.trim().toLowerCase(),
+  ) ?? null;
 }
 
-/** Create a real adapter. The injectable fetch/config hooks keep it testable. */
+/** Ensure a description finding was produced from the current GitLab value. */
+function assertFreshDescription(finding: AgentFinding, issue: GitLabIssueResponse): void {
+  if (!Object.hasOwn(finding, 'originalDescription')) {
+    throw new Error('Description finding is missing its originalDescription audit value.');
+  }
+  if (finding.originalDescription !== issue.description) {
+    throw new Error(
+      `Issue #${finding.issueIid} description changed after audit; rerun the audit before writing.`,
+    );
+  }
+  if (issue.updated_at !== undefined && finding.originalUpdatedAt === undefined) {
+    throw new Error(
+      `Issue #${finding.issueIid} finding is missing its originalUpdatedAt audit value.`,
+    );
+  }
+  if (finding.originalUpdatedAt !== undefined &&
+      finding.originalUpdatedAt !== issue.updated_at) {
+    throw new Error(
+      `Issue #${finding.issueIid} was updated after audit; rerun the audit before writing.`,
+    );
+  }
+}
+
+/** Create a real adapter. Injectable fetch/config hooks keep it deterministic in tests. */
 export function createGitLabRestWriterAdapter(
   fetchFn: FetchFn = globalThis.fetch as FetchFn,
-  configLoader: () => RuntimeConfig | null = loadRuntimeConfig
+  configLoader: () => GitLabRuntimeConfig = loadGitLabRuntimeConfig,
 ): GitLabWriterAdapter {
   return {
     async applyFindingToGitLab(
       finding: AnyFinding,
-      valueToWrite: string
+      valueToWrite: string,
     ): Promise<GitLabWriteResult> {
-      const config = configLoader();
-      if (!config) {
-        return {
-          written: false,
-          value: '',
-          error: 'GitLab is not configured. Set GITLAB_HOST, GITLAB_PROJECT, and GITLAB_TOKEN.',
-        };
-      }
-      if (config.scopeError) {
-        return { written: false, value: '', error: config.scopeError };
-      }
-
-      const project = encodeURIComponent(config.project);
-      const baseUrl = `${config.host}/api/v4/projects/${project}`;
-      const request = async <T>(endpoint: string, init: RequestInit = {}): Promise<T> => {
-        const response = await fetchFn(`${baseUrl}${endpoint}`, {
-          ...init,
-          headers: {
-            'PRIVATE-TOKEN': config.token,
-            'Content-Type': 'application/json',
-            ...(init.headers as Record<string, string> | undefined),
-          },
-        });
-        if (!response.ok) {
-          let detail = response.statusText;
-          try {
-            const body = await response.json() as { message?: string | Record<string, string[]> };
-            if (typeof body.message === 'string') detail = body.message;
-            else if (body.message) detail = JSON.stringify(body.message);
-          } catch {
-            // Keep the status text when GitLab returns a non-JSON error.
-          }
-          throw new Error(`GitLab returned HTTP ${response.status} for ${endpoint}: ${detail}`);
-        }
-        return response.json() as Promise<T>;
-      };
-
       try {
+        const config = configLoader();
+        const request = createGitLabRequest(config, fetchFn);
+
         if (isDependencyFinding(finding)) {
-          if (finding.suggestedLinkType === 'blocks' && config.blockingIssueLinks !== true) {
-            return {
-              written: false,
-              value: '',
-              error:
-                'Blocking issue links are disabled for this GitLab tier. ' +
-                'Use relates-to or set blockingIssueLinks=true after confirming Premium/Ultimate support.',
-            };
+          if (valueToWrite !== 'blocks' && valueToWrite !== 'relates-to') {
+            throw new Error('Dependency link type must be "blocks" or "relates-to".');
           }
+          if (valueToWrite === 'blocks' &&
+              config.projectConfig.blockingIssueLinks !== true) {
+            throw new Error(
+              'Blocking issue links are disabled for this GitLab tier. ' +
+              'Use relates-to or set blockingIssueLinks=true after confirming Premium/Ultimate support.',
+            );
+          }
+          const desiredType = valueToWrite === 'relates-to' ? 'relates_to' : 'blocks';
           const projectDetails = await request<{ id: number }>('');
+          const existingLinks = await request<GitLabIssueLinkResponse[]>(
+            `/issues/${finding.sourceIid}/links?per_page=100`,
+          );
+          const existing = existingLinks.find((link) => (
+            link.project_id === projectDetails.id && link.iid === finding.targetIid
+          ));
+          if (existing) {
+            if (existing.link_type === desiredType) {
+              return { written: true, value: valueToWrite };
+            }
+            throw new Error(
+              `Issues #${finding.sourceIid} and #${finding.targetIid} are already linked ` +
+              `as ${existing.link_type}; review the existing relationship manually.`,
+            );
+          }
           await request(`/issues/${finding.sourceIid}/links`, {
             method: 'POST',
             body: JSON.stringify({
               target_project_id: projectDetails.id,
               target_issue_iid: finding.targetIid,
-              link_type: finding.suggestedLinkType === 'relates-to' ? 'relates_to' : 'blocks',
+              link_type: desiredType,
             }),
           });
           return { written: true, value: valueToWrite };
@@ -249,28 +168,55 @@ export function createGitLabRestWriterAdapter(
 
         const issue = await request<GitLabIssueResponse>(`/issues/${finding.issueIid}`);
         let body: Record<string, unknown>;
+        let writtenValue = valueToWrite;
 
         switch (finding.action) {
           case 'draft_ac':
-            body = { description: acceptanceCriteriaDescription(issue.description, valueToWrite) };
+            assertFreshDescription(finding, issue);
+            body = {
+              description: acceptanceCriteriaDescription(issue.description, valueToWrite),
+            };
             break;
           case 'rewrite_desc':
+            assertFreshDescription(finding, issue);
             body = { description: ambiguityRewriteDescription(issue.description, valueToWrite) };
             break;
           case 'state_transition': {
-            if (!config.workflowStates.some((state) => state.toLowerCase() === valueToWrite.toLowerCase())) {
-              return {
-                written: false,
-                value: '',
-                error: `Unknown workflow state: ${valueToWrite}`,
-              };
+            const target = canonicalState(valueToWrite, config);
+            if (!target) {
+              throw new Error(
+                `Unknown workflow state "${valueToWrite}": it is not configured for this project.`,
+              );
             }
-            const workflowNames = new Set(config.workflowStates.map((state) => state.toLowerCase()));
-            const labels = issue.labels.filter((label) => !workflowNames.has(label.toLowerCase()));
-            labels.push(valueToWrite);
-            body = { labels: labels.join(',') };
-            if (/^(done|closed|complete(?:d)?)$/i.test(valueToWrite)) body['state_event'] = 'close';
-            else if (issue.state === 'closed') body['state_event'] = 'reopen';
+            const current = deriveCurrentWorkflowState(issue, config.projectConfig);
+            if (!current) {
+              throw new Error('Current workflow state is missing or ambiguous in issue labels.');
+            }
+            if (!isDirectTransition(current, target, config.projectConfig)) {
+              throw new Error(
+                `State transition "${current}" -> "${target}" is not a direct configured edge.`,
+              );
+            }
+
+            const workflowNames = new Set(
+              config.projectConfig.workflowStates.map((state) => state.toLowerCase()),
+            );
+            const labelsToRemove = issue.labels.filter(
+              (label) => workflowNames.has(label.toLowerCase()),
+            );
+            body = {
+              add_labels: target,
+              ...(labelsToRemove.length === 0
+                ? {}
+                : { remove_labels: labelsToRemove.join(',') }),
+            };
+            const done = resolveStateForConcept(config.projectConfig, 'done');
+            const isDone = done
+              ? target.toLowerCase() === done.toLowerCase()
+              : /^(done|closed|complete(?:d)?)$/i.test(target);
+            if (isDone) body['state_event'] = 'close';
+            if (!isDone && issue.state === 'closed') body['state_event'] = 'reopen';
+            writtenValue = target;
             break;
           }
           case 'missing_coverage':
@@ -281,9 +227,9 @@ export function createGitLabRestWriterAdapter(
           method: 'PUT',
           body: JSON.stringify(body),
         });
-        return { written: true, value: valueToWrite };
+        return { written: true, value: writtenValue };
       } catch (error) {
-        return { written: false, value: '', error: safeError(error) };
+        return { written: false, value: '', error: safeGitLabError(error) };
       }
     },
   };
@@ -293,7 +239,7 @@ export function createGitLabRestWriterAdapter(
 export const stubWriterAdapter: GitLabWriterAdapter = {
   async applyFindingToGitLab(
     _finding: AnyFinding,
-    valueToWrite: string
+    valueToWrite: string,
   ): Promise<GitLabWriteResult> {
     return { written: true, value: valueToWrite };
   },

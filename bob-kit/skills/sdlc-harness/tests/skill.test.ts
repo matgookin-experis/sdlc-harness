@@ -1,18 +1,10 @@
 /**
  * sdlc-harness skill unit tests
  *
- * These tests verify the skill's expected conversation flows and agent logic
- * against mock GitLab API responses. They are written in Jest and are designed
- * to run once the MCP server (Section 2A) is built. Until then, they serve as
- * a runnable specification: each describe block captures the exact inputs and
- * outputs the skill must produce for a given scenario.
+ * These tests verify the skill's agent, review, telemetry, and scoped REST
+ * behavior against deterministic in-process GitLab responses.
  *
- * Run: npm test  (once package.json / tsconfig.json are in place from Section 2A)
- *
- * Mock strategy: each test imports a lightweight in-process mock of the
- * gitlab-local MCP tool surface (see __mocks__/gitlab-client.ts) that returns
- * the fixtures defined in __fixtures__/. The skill logic under test is the
- * pure reasoning layer — no real HTTP calls, no Docker.
+ * Run: npm test. No real HTTP calls or Docker services are required.
  */
 
 import * as os from 'os';
@@ -28,7 +20,7 @@ import { runCoverageAgent } from '../src/agents/coverage-agent';
 import { applyFinding, rejectFinding, _resetSessionTracker } from '../src/skill/review';
 import { readTelemetry, computeAcceptanceRate } from '../src/skill/telemetry';
 import { createGitLabRestWriterAdapter, stubWriterAdapter } from '../src/skill/gitlab-writer-adapter';
-import type { TelemetryEntry, DependencyFinding } from '../src/models';
+import type { TelemetryEntry, DependencyFinding, ProjectConfig } from '../src/models';
 
 // ---------------------------------------------------------------------------
 // Telemetry isolation — use a fresh temp file for every test run
@@ -57,7 +49,8 @@ beforeEach(() => {
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const PROJECT_CONFIG = {
+const PROJECT_CONFIG: ProjectConfig = {
+  provider: 'gitlab',
   projectUrl: 'http://localhost:8080/sdlc-harness/weather-dashboard',
   workItemTypes: ['Story', 'Bug', 'Task'],
   workflowStates: ['Open', 'In Progress', 'In Review', 'Done'],
@@ -122,8 +115,10 @@ const MR_MERGED_FOR_ISSUE_5 = {
   title: 'feat: add CI pipeline for staging deploy',
   description: 'Closes #5',
   state: 'merged',
-  mergedAt: '2025-09-01T10:00:00Z',
+  mergedAt: '2026-08-28T10:00:00Z',
 };
+
+const TEST_NOW = new Date('2026-08-29T12:00:00.000Z');
 
 // ---------------------------------------------------------------------------
 // 1. Onboarding flow
@@ -457,7 +452,7 @@ describe('Dependency agent', () => {
     );
 
     expect(link).toBeDefined();
-    expect(['blocks', 'relates-to']).toContain(link!.suggestedLinkType);
+    expect(link!.suggestedLinkType).toBe('blocks');
   });
 
   test('uses CE-compatible relates-to links when blocking links are disabled', async () => {
@@ -500,16 +495,14 @@ describe('Dependency agent', () => {
 
   // P2-10: direction — B says "Depends on" so A blocks B (sourceIid=A=3, targetIid=B=9)
   test('P2-10: direction — issue carrying "Depends on" is the dependent (target), not the source', async () => {
-    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
-    const blocksFinding = findings.find((f) => f.suggestedLinkType === 'blocks');
-    if (blocksFinding) {
-      // ISSUE_AUTH_B (iid=9) says "Depends on the token refresh flow"
-      // → ISSUE_AUTH_B is the dependent side → ISSUE_AUTH_A (iid=3) blocks it
-      // So sourceIid must be 3 (prerequisite) and targetIid must be 9 (dependent)
-      expect(blocksFinding.sourceIid).toBe(3);
-      expect(blocksFinding.targetIid).toBe(9);
-    }
-    // If no blocks finding, both issues carried dependency language → falls back to relates-to, which is also acceptable
+    const findings = await runDependencyAgent(
+      [ISSUE_AUTH_A, ISSUE_AUTH_B],
+      { ...PROJECT_CONFIG, blockingIssueLinks: true },
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0].suggestedLinkType).toBe('blocks');
+    expect(findings[0].sourceIid).toBe(3);
+    expect(findings[0].targetIid).toBe(9);
   });
 
   // P2-10: no /token refresh/ in BLOCKS_SIGNALS — issues without dep language → relates-to
@@ -532,11 +525,8 @@ describe('Dependency agent', () => {
       assignee: null,
     };
     const findings = await runDependencyAgent([issueA, issueB], PROJECT_CONFIG);
-    // Both have "token refresh" text; neither has "depends on" → should be relates-to
-    if (findings.length > 0) {
-      expect(findings[0].suggestedLinkType).toBe('relates-to');
-    }
-    // (If Jaccard < threshold, no finding at all — that's also fine)
+    expect(findings).toHaveLength(1);
+    expect(findings[0].suggestedLinkType).toBe('relates-to');
   });
 });
 
@@ -545,17 +535,18 @@ describe('Dependency agent', () => {
 // ---------------------------------------------------------------------------
 
 describe('State-transition agent', () => {
-  test('proposes In Review when a linked MR has been merged', async () => {
+  test('advances one direct edge toward In Review when a linked MR has been merged', async () => {
     const finding = await runStateTransitionAgent(
       ISSUE_STALE_STATE,
       [MR_MERGED_FOR_ISSUE_5],
       PROJECT_CONFIG,
+      TEST_NOW,
     );
 
     expect(finding).not.toBeNull();
     expect(finding!.issueIid).toBe(5);
     expect(finding!.agent).toBe('ST');
-    expect(finding!.suggestedValue).toBe('In Review');
+    expect(finding!.suggestedValue).toBe('In Progress');
   });
 
   test('returns null when the issue state already matches activity signals', async () => {
@@ -565,6 +556,7 @@ describe('State-transition agent', () => {
       alreadyInReview,
       [MR_MERGED_FOR_ISSUE_5],
       PROJECT_CONFIG,
+      TEST_NOW,
     );
 
     expect(finding).toBeNull();
@@ -575,6 +567,7 @@ describe('State-transition agent', () => {
       ISSUE_STALE_STATE,
       [], // no MRs
       PROJECT_CONFIG,
+      TEST_NOW,
     );
 
     expect(finding).toBeNull();
@@ -586,11 +579,10 @@ describe('State-transition agent', () => {
       { ...ISSUE_STALE_STATE, state: 'opened' },
       [{ ...MR_MERGED_FOR_ISSUE_5, state: 'closed' }], // closed, not merged
       PROJECT_CONFIG,
+      TEST_NOW,
     );
 
-    if (finding !== null) {
-      expect(finding.suggestedValue).not.toBe('Done');
-    }
+    expect(finding).toBeNull();
   });
 
   test('proposes In Progress when a linked MR is open', async () => {
@@ -599,12 +591,11 @@ describe('State-transition agent', () => {
       ISSUE_STALE_STATE,
       [openMr],
       PROJECT_CONFIG,
+      TEST_NOW,
     );
 
-    // "In Progress" must be a valid transition from "Open"
-    if (finding !== null) {
-      expect(finding.suggestedValue).toBe('In Progress');
-    }
+    expect(finding).not.toBeNull();
+    expect(finding!.suggestedValue).toBe('In Progress');
   });
 });
 
@@ -618,13 +609,16 @@ describe('Human review interface', () => {
     issueIid: 12,
     action: 'draft_ac' as const,
     suggestedValue: 'Given a user\nWhen they open the dashboard\nThen they see the forecast widget',
+    originalDescription: ISSUE_NO_AC.description,
   };
 
   // Missing runtime configuration returns written:false for writable findings,
   // so the telemetry outcome must be 'failed', NOT 'accepted'.
   // This prevents fabricated acceptance-rate numbers.
   test('FIX-1: unconfigured adapter logs outcome "failed", never "accepted"', async () => {
-    const unconfigured = createGitLabRestWriterAdapter(globalThis.fetch, () => null);
+    const unconfigured = createGitLabRestWriterAdapter(globalThis.fetch, () => {
+      throw new Error('Project is not onboarded.');
+    });
     const result = await applyFinding(finding, { editedValue: null }, unconfigured);
     // No GitLab configuration — write did not happen.
     expect(result.gitlabWriteCalled).toBe(false);
@@ -699,8 +693,8 @@ describe('Human review interface', () => {
 
   test('telemetry entry has a valid ISO timestamp', async () => {
     const result = await applyFinding(finding, { editedValue: null }, stubWriterAdapter);
-    const ts = result.telemetryEntry.timestamp;
-    expect(new Date(ts).toISOString()).toBe(ts);
+    const timestamp = result.telemetryEntry.timestamp;
+    expect(new Date(timestamp).toISOString()).toBe(timestamp);
   });
 
   // P1-5: DependencyFinding can be passed to applyFinding / rejectFinding
@@ -729,11 +723,19 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret',
-      workflowStates: ['Open', 'In Progress', 'In Review', 'Done'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
 
-    const result = await applyFinding(finding, { editedValue: null }, adapter);
+    const result = await applyFinding(
+      { ...finding, originalDescription: 'Existing details' },
+      { editedValue: null },
+      adapter,
+    );
 
     expect(result.gitlabWriteCalled).toBe(true);
     expect(updateBody['description']).toContain('Existing details');
@@ -749,20 +751,33 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     const rewritten = 'The save handler returns HTTP 500 when the display name is empty.';
-    const result = await applyFinding({ agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: rewritten }, { editedValue: null }, adapter);
+    const result = await applyFinding({
+      agent: 'AM',
+      issueIid: 2,
+      action: 'rewrite_desc',
+      suggestedValue: rewritten,
+      originalDescription: 'fix it',
+    }, { editedValue: null }, adapter);
     expect(result.gitlabWriteCalled).toBe(true);
     expect(updateBody).toEqual({ description: rewritten });
   });
 
   test('ambiguity rewrite preserves acceptance criteria already added to the issue', async () => {
     let updateBody: Record<string, unknown> = {};
+    const currentDescription =
+      'fix it\n\n## Acceptance Criteria\n**Given** a user\n**When** they save\n**Then** the value persists';
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
       if (!init?.method) {
         return new Response(JSON.stringify({
-          description: 'fix it\n\n## Acceptance Criteria\n**Given** a user\n**When** they save\n**Then** the value persists',
+          description: currentDescription,
           labels: ['Open'],
           state: 'opened',
         }), { status: 200 });
@@ -771,11 +786,22 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     const rewritten = 'Saving a preference returns HTTP 500 when the display name is empty.';
     const result = await applyFinding(
-      { agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: rewritten },
+      {
+        agent: 'AM',
+        issueIid: 2,
+        action: 'rewrite_desc',
+        suggestedValue: rewritten,
+        originalDescription: currentDescription,
+      },
       { editedValue: null },
       adapter,
     );
@@ -787,10 +813,12 @@ describe('Human review interface', () => {
 
   test('ambiguity rewrite preserves bold acceptance-criteria sections', async () => {
     let updateBody: Record<string, unknown> = {};
+    const currentDescription =
+      'fix it\n\n**Acceptance Criteria**\nGiven x\nWhen y\nThen z';
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
       if (!init?.method) {
         return new Response(JSON.stringify({
-          description: 'fix it\n\n**Acceptance Criteria**\nGiven x\nWhen y\nThen z',
+          description: currentDescription,
           labels: ['Open'],
           state: 'opened',
         }), { status: 200 });
@@ -799,10 +827,21 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     await applyFinding(
-      { agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: 'Specific replacement.' },
+      {
+        agent: 'AM',
+        issueIid: 2,
+        action: 'rewrite_desc',
+        suggestedValue: 'Specific replacement.',
+        originalDescription: currentDescription,
+      },
       { editedValue: null },
       adapter,
     );
@@ -810,7 +849,7 @@ describe('Human review interface', () => {
     expect(updateBody['description']).toContain('Then z');
   });
 
-  test('real adapter replaces workflow labels for a state transition', async () => {
+  test('real adapter updates workflow labels with native add/remove fields', async () => {
     let updateBody: Record<string, unknown> = {};
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
       if (!init?.method) return new Response(JSON.stringify({ description: '', labels: ['Bug', 'Open'], state: 'opened' }), { status: 200 });
@@ -818,25 +857,41 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret',
-      workflowStates: ['Open', 'In Progress', 'In Review', 'Done'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
-    const result = await applyFinding({ agent: 'ST', issueIid: 5, action: 'state_transition', suggestedValue: 'In Review' }, { editedValue: null }, adapter);
+    const result = await applyFinding({
+      agent: 'ST', issueIid: 5, action: 'state_transition', suggestedValue: 'In Progress',
+    }, { editedValue: null }, adapter);
     expect(result.gitlabWriteCalled).toBe(true);
-    expect(updateBody['labels']).toBe('Bug,In Review');
+    expect(updateBody).toEqual({
+      add_labels: 'In Progress',
+      remove_labels: 'Open',
+    });
   });
 
   test('real adapter creates a GitLab dependency link', async () => {
     let linkBody: Record<string, unknown> = {};
     const fetchMock = jest.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes('/issues/3/links?')) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
       if (!init?.method) return new Response(JSON.stringify({ id: 42 }), { status: 200 });
       expect(url).toContain('/issues/3/links');
       linkBody = JSON.parse(init?.body as string) as Record<string, unknown>;
       return new Response(JSON.stringify({ link_type: 'blocks' }), { status: 201 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: [],
-      blockingIssueLinks: true,
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: { ...PROJECT_CONFIG, blockingIssueLinks: true },
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     const depFinding: DependencyFinding = {
       agent: 'DEP', sourceIid: 3, targetIid: 9, suggestedLinkType: 'blocks', confidence: 0.9,
@@ -849,8 +904,12 @@ describe('Human review interface', () => {
   test('real adapter rejects blocks links when the GitLab tier capability is disabled', async () => {
     const fetchMock = jest.fn();
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: [],
-      blockingIssueLinks: false,
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: { ...PROJECT_CONFIG, blockingIssueLinks: false },
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     const depFinding: DependencyFinding = {
       agent: 'DEP', sourceIid: 3, targetIid: 9, suggestedLinkType: 'blocks', confidence: 0.9,
@@ -863,13 +922,9 @@ describe('Human review interface', () => {
 
   test('real adapter blocks writes when runtime and onboarded projects differ', async () => {
     const fetchMock = jest.fn();
-    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test',
-      project: 'wrong/project',
-      token: 'secret',
-      workflowStates: ['Open'],
-      scopeError: 'Configured GitLab project does not match the onboarded project.',
-    }));
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => {
+      throw new Error('Configured GitLab project does not match the onboarded project.');
+    });
     const result = await applyFinding(finding, { editedValue: null }, adapter);
     expect(result.gitlabWriteCalled).toBe(false);
     expect(result.error).toMatch(/does not match/i);
@@ -884,7 +939,12 @@ describe('Human review interface', () => {
       return new Response(JSON.stringify({}), { status: 200 });
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
-      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+      host: 'http://gitlab.test',
+      project: 'group/project',
+      token: 'secret',
+      projectConfig: PROJECT_CONFIG,
+      configPath: '/tmp/.sdlc-harness.json',
+      projectRoot: '/tmp',
     }));
     const result = await applyFinding(
       { agent: 'ST', issueIid: 5, action: 'state_transition', suggestedValue: 'In Review' },
@@ -916,6 +976,7 @@ describe('Human review interface', () => {
       issueIid: 7,
       action: 'rewrite_desc' as const,
       suggestedValue: 'Saving on the settings page returns a 500 when the display-name field is empty.',
+      originalDescription: ISSUE_VAGUE.description,
     };
     const result = await applyFinding(amFinding, { editedValue: null }, stubWriterAdapter);
     expect(result.gitlabWriteCalled).toBe(true);
@@ -1018,14 +1079,12 @@ describe('Telemetry acceptance-rate', () => {
     expect(summary.rejected).toBe(1);
     expect(summary.failed).toBe(0);
     expect(summary.acceptanceRate).toBeCloseTo(0.5);
-    expect(summary.approvalRate).toBeCloseTo(0.75);
   });
 
   test('returns all zeros for an empty log', () => {
     const summary = computeAcceptanceRate([]);
     expect(summary.total).toBe(0);
     expect(summary.acceptanceRate).toBe(0);
-    expect(summary.approvalRate).toBe(0);
   });
 
   test('100% acceptance rate when all are accepted', () => {
@@ -1039,7 +1098,6 @@ describe('Telemetry acceptance-rate', () => {
     }));
     const summary = computeAcceptanceRate(entries);
     expect(summary.acceptanceRate).toBe(1);
-    expect(summary.approvalRate).toBe(1);
   });
 
   // FIX-1: failed entries excluded from total and rates
@@ -1071,7 +1129,6 @@ describe('Telemetry acceptance-rate', () => {
     expect(summary.total).toBe(0);
     expect(summary.failed).toBe(2);
     expect(summary.acceptanceRate).toBe(0);
-    expect(summary.approvalRate).toBe(0);
   });
 });
 

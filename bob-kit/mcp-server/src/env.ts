@@ -11,8 +11,17 @@
  *    the operator knows exactly what to fix.
  */
 
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { existsSync, lstatSync, readFileSync } from "fs";
+import { dirname, resolve } from "path";
+import { fileURLToPath } from "url";
+
+const DEFAULT_ENV_FILE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '.env',
+);
 
 // ---------------------------------------------------------------------------
 // Resolved configuration shape
@@ -43,13 +52,33 @@ export interface Config {
  * Values may be quoted with single or double quotes (quotes are stripped).
  */
 function parseDotenvFile(filePath: string): Record<string, string> {
-  let raw: string;
-  try {
-    raw = readFileSync(filePath, "utf-8");
-  } catch {
-    // File is optional — return empty record if it doesn't exist
+  if (!existsSync(filePath)) {
     return {};
   }
+
+  const stats = lstatSync(filePath);
+  if (stats.isSymbolicLink()) {
+    throw new Error(
+      `Refusing to load environment file ${filePath}: symbolic links are not allowed.`,
+    );
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(`Environment path is not a regular file: ${filePath}`);
+  }
+
+  if (process.platform !== 'win32') {
+    const mode = stats.mode & 0o777;
+    if ((mode & 0o077) !== 0) {
+      const displayMode = mode.toString(8).padStart(3, '0');
+      throw new Error(
+        `Refusing to load environment file ${filePath}: mode ${displayMode} permits ` +
+        'group or world access. Run chmod 600 on the file.',
+      );
+    }
+  }
+
+  const raw = readFileSync(filePath, 'utf-8');
 
   const result: Record<string, string> = {};
   for (const line of raw.split(/\r?\n/)) {
@@ -80,20 +109,21 @@ function parseDotenvFile(filePath: string): Record<string, string> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolve the selected credentials file without reading it.
+ * @returns The SDLC_ENV_FILE override or canonical repository-root .env path.
+ */
+export function resolveEnvFilePath(): string {
+  return resolve(process.env['SDLC_ENV_FILE'] ?? DEFAULT_ENV_FILE);
+}
+
+/**
  * Merge variables from the resolved .env file into process.env, without
  * overriding any variable already set (existing values always win).
- * Silently does nothing if the file is absent — this is a best-effort
- * merge, not validation.
  *
- * This is the building block loadConfig() uses internally. It is exported
- * separately so callers that want .env values picked up but must NOT treat
- * missing variables as fatal (e.g. the smoke test's optional live-GitLab
- * check) can call it directly instead of loadConfig(), which throws.
+ * Silently does nothing if the file is absent. Unsafe files still fail closed.
  */
 export function mergeEnvFile(): void {
-  const envFilePath = resolve(
-    process.env["SDLC_ENV_FILE"] ?? ".env"
-  );
+  const envFilePath = resolveEnvFilePath();
 
   // Parse file (silently skipped if absent)
   const fileVars = parseDotenvFile(envFilePath);

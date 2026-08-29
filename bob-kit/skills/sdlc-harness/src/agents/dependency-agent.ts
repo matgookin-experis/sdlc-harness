@@ -29,7 +29,20 @@ const STOP_WORDS = new Set([
   'does','did','have','has','had','not','no','as','if','so','then','when',
   'than','what','how','all','any','both','each','few','more','also','into',
   'over','after','before','between','through','up','out','about','without',
+  'acceptance','across','add','app','better','click','criteria','dashboard','display',
+  'displayed','given','immediately','issue','load','localstorage','page',
+  'make','persist','preference','save','saved','session','show','switch','switche',
+  'temperature','they','toggle','update','user',
 ]);
+
+/** Normalize simple English plurals so location/locations and city/cities match. */
+function normalizeToken(token: string): string {
+  if (token.length > 4 && token.endsWith('ies')) return `${token.slice(0, -3)}y`;
+  if (token.length > 4 && token.endsWith('s') && !token.endsWith('ss')) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
 
 /**
  * Extract significant keyword tokens from a text string.
@@ -41,7 +54,8 @@ function tokenize(text: string): Set<string> {
       .toLowerCase()
       .replace(/[^a-z\s]/g, ' ')
       .split(/\s+/)
-      .filter((t) => t.length >= 3 && !STOP_WORDS.has(t))
+      .map(normalizeToken)
+      .filter((token) => token.length >= 3 && !STOP_WORDS.has(token))
   );
 }
 
@@ -60,27 +74,79 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
 // ---------------------------------------------------------------------------
 
 /**
- * Strong "blocks" signal patterns: one issue explicitly mentions depending on,
- * requiring, or being a prerequisite of another concept.
+ * Directional language is split by the role of the issue carrying it. Treating
+ * "A blocks B" like "A depends on B" reverses the resulting GitLab link.
  *
  * NOTE: no domain-specific patterns (e.g. /token refresh/) are included here.
  * Rigging the classifier to the seed data produces arbitrary link directions
  * on real backlogs. Only generic dependency language is matched.
  */
-const BLOCKS_SIGNALS: RegExp[] = [
+const DEPENDENT_SIGNALS: RegExp[] = [
   /\bdepends?\s+on\b/i,
   /\brequires?\b/i,
   /\bprerequisite\b/i,
-  /\bbefore\b.+\bcan\b/i,
+  /\bcannot\s+(?:start|proceed|complete)\s+until\b/i,
   /\bneed(s|ed)?\s+to\s+be\s+(done|complete|implemented)\b/i,
-  /\bblocks?\b/i,
 ];
 
-/**
- * Return true if the given text contains explicit dependency language.
- */
-function hasBlocksSignal(text: string): boolean {
-  return BLOCKS_SIGNALS.some((re) => re.test(text));
+const BLOCKER_SIGNALS: RegExp[] = [
+  /\bblocks?\b/i,
+  /\bmust\s+be\s+(?:done|complete|implemented)\s+before\b/i,
+];
+
+type DependencyRole = 'blocker' | 'dependent' | 'ambiguous' | 'none';
+
+interface RoleEvidence {
+  role: DependencyRole;
+  isCounterpartSpecific: boolean;
+}
+
+/** Return the sentence containing a directional match. */
+function matchingSentence(text: string, pattern: RegExp): string | null {
+  const match = pattern.exec(text);
+  if (!match || match.index === undefined) return null;
+  const before = text.slice(0, match.index);
+  const after = text.slice(match.index + match[0].length);
+  const start = Math.max(before.lastIndexOf('.'), before.lastIndexOf('\n')) + 1;
+  const period = after.search(/[.\n]/);
+  const end = period < 0 ? text.length : match.index + match[0].length + period;
+  return text.slice(start, end);
+}
+
+/** Check whether directional evidence names or describes the counterpart. */
+function isCounterpartSpecific(
+  sentence: string | null,
+  counterpart: IssueInput,
+): boolean {
+  if (!sentence) return false;
+  if (new RegExp(`(?:^|\\s)#${counterpart.iid}\\b`).test(sentence)) return true;
+  const counterpartTokens = tokenize(counterpart.title);
+  if (counterpartTokens.size === 0) return false;
+  const sentenceTokens = tokenize(sentence);
+  const overlap = [...counterpartTokens].filter((token) => sentenceTokens.has(token)).length;
+  return overlap >= Math.min(2, counterpartTokens.size);
+}
+
+/** Classify directional language and whether it identifies the paired issue. */
+function dependencyEvidence(issue: IssueInput, counterpart: IssueInput): RoleEvidence {
+  const text = `${issue.title}. ${issue.description ?? ''}`;
+  const blockerSentences = BLOCKER_SIGNALS
+    .map((pattern) => matchingSentence(text, pattern))
+    .filter((sentence): sentence is string => sentence !== null);
+  const dependentSentences = DEPENDENT_SIGNALS
+    .map((pattern) => matchingSentence(text, pattern))
+    .filter((sentence): sentence is string => sentence !== null);
+  if (blockerSentences.length > 0 && dependentSentences.length > 0) {
+    return { role: 'ambiguous', isCounterpartSpecific: false };
+  }
+  const sentences = blockerSentences.length > 0 ? blockerSentences : dependentSentences;
+  if (sentences.length === 0) return { role: 'none', isCounterpartSpecific: false };
+  return {
+    role: blockerSentences.length > 0 ? 'blocker' : 'dependent',
+    isCounterpartSpecific: sentences.some((sentence) => (
+      isCounterpartSpecific(sentence, counterpart)
+    )),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +154,10 @@ function hasBlocksSignal(text: string): boolean {
 // ---------------------------------------------------------------------------
 
 /** Jaccard threshold above which issues are considered meaningfully related. */
-const OVERLAP_THRESHOLD = 0.12;
+const OVERLAP_THRESHOLD = 0.08;
+
+/** Require more than one shared concept to avoid generic one-word pairings. */
+const MIN_SHARED_TOKENS = 2;
 
 /** Jaccard threshold above which confidence is boosted to "high". */
 const HIGH_CONFIDENCE_THRESHOLD = 0.25;
@@ -128,34 +197,44 @@ export async function runDependencyAgent(
       if (seenPairs.has(pairKey)) continue;
 
       const similarity = jaccardSimilarity(tokenSets[i], tokenSets[j]);
-      if (similarity < OVERLAP_THRESHOLD) continue;
+      const sharedTokens = [...tokenSets[i]].filter((token) => tokenSets[j].has(token));
+      if (sharedTokens.length < MIN_SHARED_TOKENS || similarity < OVERLAP_THRESHOLD) continue;
 
       seenPairs.add(pairKey);
 
-      const textA = `${a.title} ${a.description ?? ''}`;
-      const textB = `${b.title} ${b.description ?? ''}`;
+      const evidenceA = dependencyEvidence(a, b);
+      const evidenceB = dependencyEvidence(b, a);
+      const roleA = evidenceA.role;
+      const roleB = evidenceB.role;
 
-      const aIsDependent = hasBlocksSignal(textA);
-      const bIsDependent = hasBlocksSignal(textB);
-
-      // Determine direction:
-      //   Only one side carries dependency language → that issue is the "dependent"
-      //   (it requires the other, so the other blocks it: sourceIid = other, targetIid = a).
-      //   Both or neither carry dependency language → direction is ambiguous → relates-to.
+      // A blocker is the source and a dependent is the target. Conflicting or absent
+      // role evidence is intentionally non-directional.
       let suggestedLinkType: 'blocks' | 'relates-to';
       let sourceIid: number;
       let targetIid: number;
 
-      if (config.blockingIssueLinks === true && aIsDependent && !bIsDependent) {
-        // A depends on B → B blocks A
-        suggestedLinkType = 'blocks';
-        sourceIid = b.iid;
-        targetIid = a.iid;
-      } else if (config.blockingIssueLinks === true && bIsDependent && !aIsDependent) {
-        // B depends on A → A blocks B
+      if (
+        config.blockingIssueLinks === true &&
+        (
+          (roleA === 'blocker' && roleB === 'dependent') ||
+          (roleA === 'blocker' && roleB === 'none' && evidenceA.isCounterpartSpecific) ||
+          (roleA === 'none' && roleB === 'dependent' && evidenceB.isCounterpartSpecific)
+        )
+      ) {
         suggestedLinkType = 'blocks';
         sourceIid = a.iid;
         targetIid = b.iid;
+      } else if (
+        config.blockingIssueLinks === true &&
+        (
+          (roleB === 'blocker' && roleA === 'dependent') ||
+          (roleB === 'blocker' && roleA === 'none' && evidenceB.isCounterpartSpecific) ||
+          (roleB === 'none' && roleA === 'dependent' && evidenceA.isCounterpartSpecific)
+        )
+      ) {
+        suggestedLinkType = 'blocks';
+        sourceIid = b.iid;
+        targetIid = a.iid;
       } else {
         // Ambiguous or no direction signal — fall back to relates-to
         suggestedLinkType = 'relates-to';
@@ -177,10 +256,10 @@ export async function runDependencyAgent(
           `Issues #${a.iid} and #${b.iid} share significant semantic overlap ` +
           `(similarity ${(similarity * 100).toFixed(0)}%). ` +
           (suggestedLinkType === 'blocks'
-            ? 'Dependency language detected — one issue appears to block or require the other.'
+            ? 'Counterpart-specific or complementary evidence identifies the blocker.'
             : config.blockingIssueLinks === true
-              ? 'The issues address related topics and likely benefit from explicit cross-referencing.'
-              : 'The issues address related topics; this GitLab configuration uses CE-compatible relates-to links.'),
+              ? 'Direction lacks counterpart-specific evidence; a non-directional link is safer.'
+              : 'Blocking links are disabled for this GitLab tier; a relates-to link is used.'),
         confidence,
       });
     }

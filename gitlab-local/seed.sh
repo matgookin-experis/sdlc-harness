@@ -4,59 +4,135 @@
 # sourced from the sdlc-harness dev branch.
 # Safe to run multiple times — skips anything that already exists.
 #
-# Reads GITLAB_ROOT_PASSWORD from the environment or from .env in the
+# Reads root and demo passwords from the environment or from .env in the
 # same directory as this script. Never falls back to a hardcoded value.
 set -euo pipefail
 
-# Load .env if present and GITLAB_ROOT_PASSWORD is not already set.
-# Parsed line-by-line rather than `source`-d: `source` runs the file as bash,
-# so special characters in a value (e.g. a password of `Pa$$w0rd!`) get
-# expanded as shell syntax (`$$` = current PID) instead of taken literally.
-# Reading each line and assigning via parameter expansion avoids that —
-# the value is captured as inert string data, never re-parsed as code.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -z "${GITLAB_ROOT_PASSWORD:-}" ] && [ -f "$SCRIPT_DIR/.env" ]; then
-  while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    case "$line" in
-      ''|'#'*) continue ;;
-    esac
-    key="${line%%=*}"
-    value="${line#*=}"
-    case "$value" in
-      \"*\") value="${value#\"}"; value="${value%\"}" ;;
-      \'*\') value="${value#\'}"; value="${value%\'}" ;;
-    esac
-    export "$key=$value"
-  done < "$SCRIPT_DIR/.env"
-fi
+# shellcheck source=env.sh
+. "$SCRIPT_DIR/env.sh"
+require_private_env_file "$SCRIPT_DIR/.env"
+load_env_value GITLAB_ROOT_PASSWORD "$SCRIPT_DIR/.env"
+load_env_value GITLAB_DEMO_PASSWORD "$SCRIPT_DIR/.env"
 
-if [ -z "${GITLAB_ROOT_PASSWORD:-}" ]; then
-  echo "ERROR: GITLAB_ROOT_PASSWORD is not set."
-  echo "  Copy gitlab-local/.env.example to gitlab-local/.env and set the variable."
+require_password() {
+  local name="$1"
+  local placeholder="$2"
+  local value="${!name:-}"
+
+  if [ -z "$value" ]; then
+    echo "ERROR: $name is not set."
+    echo "  Copy gitlab-local/.env.example to gitlab-local/.env and set it explicitly."
+    exit 1
+  fi
+  if [ "$value" = "$placeholder" ]; then
+    echo "ERROR: $name still has the placeholder value from .env.example."
+    exit 1
+  fi
+  if [ "${#value}" -lt 8 ]; then
+    echo "ERROR: $name must contain at least 8 characters."
+    exit 1
+  fi
+}
+
+require_password GITLAB_ROOT_PASSWORD "change_me_before_starting"
+require_password GITLAB_DEMO_PASSWORD "change_me_before_seeding"
+if [ "$GITLAB_ROOT_PASSWORD" = "$GITLAB_DEMO_PASSWORD" ]; then
+  echo "ERROR: GITLAB_ROOT_PASSWORD and GITLAB_DEMO_PASSWORD must be different." >&2
   exit 1
 fi
 
-GITLAB_URL="http://localhost:8080"
-ROOT_PASSWORD="$GITLAB_ROOT_PASSWORD"
-DEMO_PASSWORD="$GITLAB_ROOT_PASSWORD"
+GITLAB_URL="http://127.0.0.1:8080"
+DEMO_PASSWORD="$GITLAB_DEMO_PASSWORD"
 
 # Use a temp dir relative to SCRIPT_DIR so its path resolves to a real Windows
 # filesystem path (not /tmp) — docker cp requires a path that Windows can resolve.
 TMP_DIR="$SCRIPT_DIR/.seed-tmp"
+umask 077
+rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
-trap 'rm -rf "$TMP_DIR"' EXIT
+
+CONTAINER_TEMP_USED=0
+PAT_CLEANUP_REQUIRED=0
+
+cleanup() {
+  local status=$?
+  local cleanup_status=0
+  local cleanup_token=""
+  local revoke_config="${CURL_CONFIG:-}"
+  local revoked=0
+
+  trap - EXIT
+  set +e
+
+  if [ "$PAT_CLEANUP_REQUIRED" -eq 1 ]; then
+    if [ -z "$revoke_config" ] || [ ! -r "$revoke_config" ]; then
+      cleanup_token=$(MSYS_NO_PATHCONV=1 docker exec gitlab \
+        cat /tmp/seed_token.txt 2>/dev/null || true)
+      if [ -n "$cleanup_token" ] && [[ "$cleanup_token" != ERROR:* ]]; then
+        revoke_config="$TMP_DIR/revoke-token.conf"
+        printf 'header = "PRIVATE-TOKEN: %s"\n' "$cleanup_token" > "$revoke_config"
+      fi
+    fi
+
+    if [ -n "$revoke_config" ] && [ -r "$revoke_config" ]; then
+      if curl --silent --show-error --fail \
+        --connect-timeout 5 --max-time 30 \
+        --config "$revoke_config" --request DELETE \
+        "$GITLAB_URL/api/v4/personal_access_tokens/self" >/dev/null 2>&1; then
+        revoked=1
+      fi
+    fi
+
+    if [ "$revoked" -eq 0 ]; then
+      if MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c \
+        'umask 077; cat > /tmp/seed_revoke_token.rb; chown git:git /tmp/seed_revoke_token.rb' \
+        < "$TMP_DIR/revoke-token.rb" >/dev/null 2>&1; then
+        run_gitlab_rails_runner /tmp/seed_revoke_token.rb \
+          "Revoking the seed API token" 30 >/dev/null 2>&1 || cleanup_status=1
+      else
+        cleanup_status=1
+      fi
+    fi
+  fi
+
+  unset cleanup_token
+
+  if [ "$CONTAINER_TEMP_USED" -eq 1 ]; then
+    MSYS_NO_PATHCONV=1 docker exec gitlab rm -f \
+      /tmp/seed_runner.rb \
+      /tmp/seed_revoke_token.rb \
+      /tmp/seed_token.txt \
+      /tmp/demo_password \
+      /tmp/update-demo-password.rb \
+      >/dev/null 2>&1 || cleanup_status=1
+  fi
+
+  rm -rf "$TMP_DIR" || cleanup_status=1
+  if [ "$cleanup_status" -ne 0 ]; then
+    echo "ERROR: Could not fully revoke the seed PAT or remove token files." >&2
+    if [ "$status" -eq 0 ]; then
+      status=1
+    fi
+  fi
+  exit "$status"
+}
+
+trap cleanup EXIT
 
 # ── Wait for GitLab to be ready ──────────────────────────────────────────────
 echo "Waiting for GitLab to be ready..."
 for i in $(seq 1 40); do
-  status=$(curl -s -o /dev/null -w "%{http_code}" "$GITLAB_URL/users/sign_in" 2>&1)
+  status="000"
+  status=$(curl --silent --output /dev/null --write-out "%{http_code}" \
+    --connect-timeout 3 --max-time 5 "$GITLAB_URL/users/sign_in" 2>/dev/null) \
+    || status="000"
   if [ "$status" = "200" ]; then
     echo "GitLab is ready."
     break
   fi
-  echo "  [$i/40] HTTP $status — retrying in 15s..."
-  sleep 15
+  echo "  [$i/40] HTTP $status — retrying in 10s..."
+  sleep 10
   if [ "$i" -eq 40 ]; then
     echo "ERROR: GitLab did not become ready in time. Is the container running?"
     exit 1
@@ -90,43 +166,77 @@ if [ -n "${GITLAB_TOKEN:-}" ]; then
 else
 
 cat > "$TMP_DIR/runner.rb" <<'RUBY'
+def write_private(path, value)
+  File.unlink(path) if File.exist?(path)
+  File.open(path, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |file|
+    file.write(value)
+  end
+end
+
 begin
-  PersonalAccessToken.where(name: 'seed-script-token', user_id: 1).delete_all
+  PersonalAccessToken.where(
+    name: 'seed-script-token', user_id: 1, revoked: false
+  ).find_each { |existing| existing.revoke! }
   token = User.find(1).personal_access_tokens.create!(
     name: 'seed-script-token',
     scopes: [:api],
-    expires_at: Date.today + 365
+    expires_at: Date.today + 1
   )
-  File.write('/tmp/seed_token.txt', token.token)
+  write_private('/tmp/seed_token.txt', token.token)
 rescue => e
-  File.write('/tmp/seed_token.txt', 'ERROR: ' + e.message)
+  write_private('/tmp/seed_token.txt', 'ERROR: ' + e.message)
 end
+RUBY
+cat > "$TMP_DIR/revoke-token.rb" <<'RUBY'
+PersonalAccessToken.where(
+  name: 'seed-script-token', user_id: 1, revoked: false
+).find_each { |token| token.revoke! }
 RUBY
 # MSYS_NO_PATHCONV=1 prevents Git Bash on Windows from translating /tmp/... container
 # paths to Windows paths when passed as arguments to docker exec.
-MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c 'cat > /tmp/runner.rb' < "$TMP_DIR/runner.rb" 2>/dev/null
-MSYS_NO_PATHCONV=1 docker exec gitlab gitlab-rails runner /tmp/runner.rb 2>/dev/null
-MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/runner.rb 2>/dev/null || true
+CONTAINER_TEMP_USED=1
+MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c \
+  'umask 077; cat > /tmp/seed_runner.rb; chown git:git /tmp/seed_runner.rb' \
+  < "$TMP_DIR/runner.rb" 2>/dev/null
+PAT_CLEANUP_REQUIRED=1
+run_gitlab_rails_runner /tmp/seed_runner.rb "Creating the seed API token"
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/seed_runner.rb 2>/dev/null || true
 
 TOKEN=$(MSYS_NO_PATHCONV=1 docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)
 MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/seed_token.txt 2>/dev/null || true
 
 if [ -z "$TOKEN" ] || [[ "$TOKEN" == ERROR:* ]]; then
-  echo "ERROR: Could not create API token: $TOKEN"
+  echo "ERROR: Could not create API token."
   echo "  Make sure GitLab is fully started and try again."
   exit 1
 fi
 echo "Token obtained."
 fi
 
+CURL_CONFIG="$TMP_DIR/curl-token.conf"
+printf 'header = "PRIVATE-TOKEN: %s"\n' "$TOKEN" > "$CURL_CONFIG"
+
 # ── Helper: call GitLab API ───────────────────────────────────────────────────
 api() {
   local method="$1"; local path="$2"; shift 2
-  curl -sf -X "$method" \
-    -H "PRIVATE-TOKEN: $TOKEN" \
+  curl --silent --show-error --fail \
+    --connect-timeout 5 --max-time 60 \
+    --config "$CURL_CONFIG" \
+    --request "$method" \
     -H "Content-Type: application/json" \
-    "$GITLAB_URL/api/v4/$path" "$@"
+    "$@" "$GITLAB_URL/api/v4/$path"
 }
+
+if [ -n "${GITLAB_TOKEN:-}" ]; then
+  TOKEN_IS_ADMIN=$(api GET "user" \
+    | python3 -c "import sys,json; print(str(json.load(sys.stdin).get('is_admin', False)).lower())")
+  TOKEN_HAS_API_SCOPE=$(api GET "personal_access_tokens/self" \
+    | python3 -c "import sys,json; print(str('api' in json.load(sys.stdin).get('scopes', [])).lower())")
+  if [ "$TOKEN_IS_ADMIN" != "true" ] || [ "$TOKEN_HAS_API_SCOPE" != "true" ]; then
+    echo "ERROR: GITLAB_TOKEN must belong to a GitLab administrator and include api scope." >&2
+    exit 1
+  fi
+fi
 
 # ── 0. Disable public sign-up ─────────────────────────────────────────────────
 # This is a closed demo instance — only root and the seeded 'demo' user should
@@ -169,25 +279,100 @@ u = json.load(sys.stdin)
 print(u[0]['id'] if u else '')
 " 2>/dev/null)
 if [ -z "$USER_ID" ]; then
-  USER_ID=$(api POST "users" -d "{
-    \"name\": \"Demo User\",
-    \"username\": \"demo\",
-    \"email\": \"demo@example.com\",
-    \"password\": \"${DEMO_PASSWORD}\",
-    \"skip_confirmation\": true
-  }" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  USER_ID=$(
+    DEMO_PASSWORD="$DEMO_PASSWORD" python3 -c '
+import json
+import os
+import sys
+
+json.dump({
+    "name": "Demo User",
+    "username": "demo",
+    "email": "demo@example.com",
+    "password": os.environ["DEMO_PASSWORD"],
+    "skip_confirmation": True,
+}, sys.stdout)
+' | api POST "users" --data-binary @- \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])"
+  )
   echo "  Created user 'demo' (id=$USER_ID)"
 else
   echo "  User 'demo' already exists (id=$USER_ID)"
+
+  if [ -n "${GITLAB_TOKEN:-}" ]; then
+    echo "  Existing demo password unchanged (Rails-free token path)"
+  else
+    # The Users API forces a password change after an administrator resets a
+    # password. Update through bounded Rails execution so the repeatable demo
+    # login remains usable without allowing a stuck runner to hang forever.
+    cat > "$TMP_DIR/update-demo-password.rb" <<'RUBY'
+password = File.binread('/tmp/demo_password')
+File.delete('/tmp/demo_password')
+user = User.find_by!(username: 'demo')
+user.password = password
+user.password_confirmation = password
+user.password_automatically_set = false
+user.save!
+RUBY
+    MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c \
+      'umask 077; cat > /tmp/update-demo-password.rb; chown git:git /tmp/update-demo-password.rb' \
+      < "$TMP_DIR/update-demo-password.rb" 2>/dev/null
+    printf '%s' "$DEMO_PASSWORD" | MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c \
+      'umask 077; cat > /tmp/demo_password; chown git:git /tmp/demo_password'
+    run_gitlab_rails_runner /tmp/update-demo-password.rb \
+      "Synchronizing the demo-user password"
+    MSYS_NO_PATHCONV=1 docker exec gitlab rm -f \
+      /tmp/demo_password /tmp/update-demo-password.rb 2>/dev/null || true
+    echo "  Synchronized the configured demo-user password"
+  fi
 fi
 
-# Add demo user to group as Developer
-MEMBER=$(api GET "groups/$GROUP_ID/members/$USER_ID" 2>/dev/null \
-  | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || true)
-if [ -z "$MEMBER" ]; then
-  api POST "groups/$GROUP_ID/members" \
-    -d "{\"user_id\":$USER_ID,\"access_level\":30}" > /dev/null
+# Repair a persisted account that was blocked, deactivated, or left pending.
+USER_STATE=$(api GET "users/$USER_ID" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('state',''))")
+case "$USER_STATE" in
+  active) ;;
+  blocked_pending_approval)
+    api POST "users/$USER_ID/approve" > /dev/null
+    echo "  Approved pending demo user"
+    ;;
+  blocked)
+    api POST "users/$USER_ID/unblock" > /dev/null
+    echo "  Unblocked demo user"
+    ;;
+  deactivated)
+    api POST "users/$USER_ID/activate" > /dev/null
+    echo "  Reactivated demo user"
+    ;;
+  banned)
+    api POST "users/$USER_ID/unban" > /dev/null
+    echo "  Unbanned demo user"
+    ;;
+  *)
+    echo "ERROR: Demo user has unsupported state '$USER_STATE'."
+    exit 1
+    ;;
+esac
+api PUT "users/$USER_ID" --data '{"external":false,"admin":false}' > /dev/null
+
+# Enforce Developer access on every run instead of only creating membership.
+MEMBER_LEVEL=$(api GET "groups/$GROUP_ID/members/$USER_ID" 2>/dev/null \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_level',''))" 2>/dev/null || true)
+if [ -z "$MEMBER_LEVEL" ]; then
+  USER_ID="$USER_ID" python3 -c '
+import json
+import os
+import sys
+
+json.dump({"user_id": int(os.environ["USER_ID"]), "access_level": 30}, sys.stdout)
+' | api POST "groups/$GROUP_ID/members" --data-binary @- > /dev/null
   echo "  Added 'demo' to group as Developer"
+elif [ "$MEMBER_LEVEL" != "30" ]; then
+  api PUT "groups/$GROUP_ID/members/$USER_ID" \
+    --data '{"access_level":30}' > /dev/null
+  echo "  Restored 'demo' group role to Developer"
+else
+  echo "  Demo user has Developer access"
 fi
 
 # ── 3. Create the Weather Dashboard project ───────────────────────────────────
@@ -199,14 +384,23 @@ p = [x for x in json.load(sys.stdin) if x['path'] == 'weather-dashboard']
 print(p[0]['id'] if p else '')
 " 2>/dev/null)
 if [ -z "$PROJECT_ID" ]; then
-  PROJECT_ID=$(api POST "projects" -d "{
-    \"name\": \"Weather Dashboard\",
-    \"path\": \"weather-dashboard\",
-    \"namespace_id\": $GROUP_ID,
-    \"visibility\": \"internal\",
-    \"initialize_with_readme\": false,
-    \"description\": \"SDLC Harness demo app - a deterministic mock weather dashboard\"
-  }" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+  PROJECT_ID=$(
+    GROUP_ID="$GROUP_ID" python3 -c '
+import json
+import os
+import sys
+
+json.dump({
+    "name": "Weather Dashboard",
+    "path": "weather-dashboard",
+    "namespace_id": int(os.environ["GROUP_ID"]),
+    "visibility": "internal",
+    "initialize_with_readme": False,
+    "description": "SDLC Harness demo app - a deterministic mock weather dashboard",
+}, sys.stdout)
+' | api POST "projects" --data-binary @- \
+      | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])"
+  )
   echo "  Created project 'weather-dashboard' (id=$PROJECT_ID)"
 else
   echo "  Project 'weather-dashboard' already exists (id=$PROJECT_ID)"
@@ -224,7 +418,8 @@ add_file() {
   local commit_msg="$3"
 
   local encoded_path
-  encoded_path=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$file_path', safe=''))")
+  encoded_path=$(FILE_PATH="$file_path" python3 -c \
+    "import os, urllib.parse; print(urllib.parse.quote(os.environ['FILE_PATH'], safe=''))")
 
   # Check if the file already exists
   local exists
@@ -232,11 +427,22 @@ add_file() {
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('file_name',''))" 2>/dev/null || true)
 
   if [ -z "$exists" ]; then
-    local content_b64
-    content_b64=$(base64 -w0 < "$src_file")
-    api POST "projects/$PROJECT_ID/repository/files/${encoded_path}" \
-      -d "{\"branch\":\"main\",\"content\":\"${content_b64}\",\"commit_message\":\"${commit_msg}\",\"encoding\":\"base64\"}" \
-      > /dev/null
+    COMMIT_MSG="$commit_msg" python3 -c '
+import base64
+import json
+import os
+import sys
+
+content = base64.b64encode(sys.stdin.buffer.read()).decode("ascii")
+json.dump({
+    "branch": "main",
+    "content": content,
+    "commit_message": os.environ["COMMIT_MSG"],
+    "encoding": "base64",
+}, sys.stdout)
+' < "$src_file" | api POST \
+      "projects/$PROJECT_ID/repository/files/${encoded_path}" \
+      --data-binary @- > /dev/null
     echo "  Added $file_path"
   else
     echo "  $file_path already exists, skipping"
@@ -299,29 +505,29 @@ add_file "app.js"               "$TMP_DIR/app.js"               "Add Weather Das
 add_file "tests.md"             "$TMP_DIR/tests.md"             "Add manual test checklist"
 add_file "WEATHER-DASHBOARD.md" "$TMP_DIR/WEATHER-DASHBOARD.md" "Add Weather Dashboard documentation"
 
+# Reuse this script's token for the issue fixtures. This keeps `seed.sh` as the
+# single seed entry point and avoids a second Rails boot on every invocation.
+echo ""
+echo "Seeding issue fixtures..."
+GITLAB_TOKEN="$TOKEN" bash "$SCRIPT_DIR/seed-issues.sh"
+unset TOKEN
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "════════════════════════════════════════"
 echo " Demo seed complete!"
 echo "════════════════════════════════════════"
 echo ""
-echo " GitLab URL  : $GITLAB_URL"
+echo " GitLab URL  : http://localhost:8080"
 echo ""
 echo " Root login"
 echo "   Username  : root"
 echo " Demo user login"
 echo "   Username  : demo"
 echo ""
-echo " Both accounts use GITLAB_ROOT_PASSWORD from gitlab-local/.env."
-echo " Deliberately not printed here — this output ends up in terminal"
-echo " scrollback, pasted logs and screen recordings. To read it:"
-echo ""
-echo "   grep GITLAB_ROOT_PASSWORD gitlab-local/.env"
-echo ""
-echo " Or copy it straight to the clipboard without displaying it:"
-echo ""
-echo "   grep '^GITLAB_ROOT_PASSWORD=' gitlab-local/.env | cut -d= -f2 | tr -d '\\n' | pbcopy"
+echo " Root and demo passwords are configured separately in gitlab-local/.env."
+echo " Passwords are deliberately not printed."
 echo ""
 echo " Demo project"
-echo "   URL       : $GITLAB_URL/sdlc-harness/weather-dashboard"
+echo "   URL       : http://localhost:8080/sdlc-harness/weather-dashboard"
 echo ""

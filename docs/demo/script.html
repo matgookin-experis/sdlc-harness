@@ -25,19 +25,21 @@
 
   <p>Step-by-step facilitator script for the full internal walkthrough
   (<a href="narrative.html">Demo Narrative</a>). The 90-second video cut is Steps 5
-  through 9 below, marked <strong>[CUT]</strong>; everything else is rehearsal-only
+  through 7 below, marked <strong>[CUT]</strong>; everything else is rehearsal-only
   context.</p>
 
   <p>Wherever Bob's exact wording comes from deterministic code (the review-interface
   block, the telemetry summary), it's quoted verbatim from <code>SKILL.md</code>.
-  Wherever it comes from the model actually drafting prose (the AM rewrite, the AC
+  Wherever it comes from Bob's built-in model drafting prose (the AM rewrite, the AC
   criteria), it's marked <strong>illustrative</strong>: expect the same shape and
   grounding, not the same words.</p>
 
   <h2>Pre-flight (do this before every take, including re-takes)</h2>
   <ol>
-    <li><code>cd gitlab-local &amp;&amp; ./manage.sh reset -y</code> (full wipe, fresh
-    boot, reseed). Confirms the backlog is in the exact seeded state every time.</li>
+    <li><code>./gitlab-local/manage.sh reset -y</code> (full wipe, fresh
+    boot, reseed, and MCP-token refresh). Unset any previously exported
+    <code>GITLAB_TOKEN</code>, then restart or reconnect Bob so its MCP process loads the
+    replacement token. This confirms the backlog is in the exact seeded state every time.</li>
     <li>Delete <code>sdlc-harness-telemetry.jsonl</code> in the repo root if it exists
     (gitignored, not touched by <code>reset</code>). The Beat 4 acceptance-rate numbers
     below assume a clean file.</li>
@@ -45,9 +47,9 @@
     not touched by <code>reset</code>). Without this, Step 2's onboarding conversation
     is skipped on any re-take — Bob finds the existing config and jumps straight to the
     governance action menu.</li>
-    <li>Confirm Bob's WatsonX provider is actually active (Settings → Providers →
-    WatsonX, model <code>ibm/granite-3-3-8b-instruct</code>), not a fallback
-    provider.</li>
+    <li>Confirm the current skill is installed and Bob is in
+    <code>🔧 SDLC Harness</code> mode. Bob supplies the built-in model; the skill controls
+    when generation is invoked, not which model runs it.</li>
     <li>Window layout per <a href="recording-guide.html">Screen Recording Guide</a>.</li>
   </ol>
 
@@ -77,20 +79,19 @@
     <li>What are the workflow states?</li>
     <li>What are the valid state transitions?</li>
   </ol>
-  <p><strong>Answers to give</strong> (matching
-  <a href="../onboarding/runbook.html">Onboarding Runbook</a> Step 9, for consistency
-  with the written runbook):</p>
+  <p><strong>Answers to give</strong> (matching the conversation values in the
+  <a href="../onboarding/runbook.html">Onboarding Runbook</a>):</p>
   <table>
     <thead><tr><th>Question</th><th>Answer</th></tr></thead>
     <tbody>
       <tr><td>Project</td><td><code>http://localhost:8080/sdlc-harness/weather-dashboard</code></td></tr>
       <tr><td>Work item types</td><td>Story, Bug, Task</td></tr>
       <tr><td>Workflow states</td><td>Open, In Progress, In Review, Done</td></tr>
-      <tr><td>Transitions</td><td>Open→In Progress; In Progress→In Review or Open; In Review→Done or In Progress</td></tr>
+      <tr><td>Transitions</td><td>Open→In Progress; In Progress→In Review; In Review→Done</td></tr>
     </tbody>
   </table>
   <p><strong>Expected close:</strong> Bob confirms onboarding is complete and offers the
-  governance action menu (Audit / Draft / Link / Transition / Template).</p>
+  governance action menu.</p>
   <p><strong>Fallback:</strong> if Bob asks a fifth question about existing templates,
   that's stale <code>SKILL.md</code> on the machine (that question was removed in Task 5
   of the Task 18/19 plan); re-run <code>bash bob-kit/mcp-server/install.sh</code> to
@@ -102,10 +103,8 @@
   <p><strong>Prompt:</strong></p>
   <pre><code>audit</code></pre>
   <p><strong>Expected Bob response (illustrative wording, exact findings are
-  deterministic):</strong> a compiled report roughly along these lines. Note this list
-  is what the agents' detection logic will actually flag, which is a few issues wider
-  than the "headline" set <code>seed-issues.sh</code> prints at seed time (that printout
-  picks one clean example per agent, not an exhaustive list):</p>
+  deterministic):</strong> a compiled report along these lines. The seed summary and
+  automated agent regression tests use this same fixture contract:</p>
   <ul>
     <li><strong>Missing acceptance criteria:</strong> issues 1, 2, 3, 5, 6, 8, 10, 11
     (any issue without an "Acceptance Criteria" heading or structured Given/When/Then
@@ -114,8 +113,8 @@
     "make it better").</li>
     <li><strong>Dependency overlap:</strong> 3↔4 (JWT/auth), 7↔8 (theme/dark mode),
     11↔12 (location/city).</li>
-    <li><strong>Stale state:</strong> issue 5 (merged MR references it, still sitting in
-    Open).</li>
+    <li><strong>Stale state:</strong> issue 5 is In Progress with a merged MR and should
+    move to In Review; issue 9 is Open and should move one edge to In Progress.</li>
   </ul>
   <p><strong>Fallback:</strong> if the AC list looks different from this, don't panic
   mid-recording; the detection rule is simple (does the description contain an AC
@@ -148,7 +147,8 @@ Review them in order. Apply, edit, skip, or reject each separately.</code></pre>
 
   <h3>Step 5 [CUT start]: Ambiguity agent on issue #2</h3>
   <p><strong>Narration:</strong> "Issue #2 says 'fix the thing on the settings page.'
-  The description just says 'the thing that saves preferences is broken, fix it.'
+  The description says the notification preference resets after reload, but still calls
+  the save path 'the thing' and says 'fix it.'
   Nothing here is testable. Let's see what Bob proposes."</p>
   <p><strong>Expected Bob response</strong> (per the review-interface format in
   <code>SKILL.md</code> Phase 4, and the Ambiguity agent's actual detection rule: flags
@@ -159,9 +159,8 @@ Review them in order. Apply, edit, skip, or reject each separately.</code></pre>
 Reason: Vague pronoun ("the thing") and non-specific subject ("fix it") aren't testable.
 
 Proposed change:
-The settings page fails to persist user preference changes. Saved preference values
-revert after a page reload instead of being written to storage. Fix the save handler
-so preference changes persist across reloads.
+The notification preference resets to its default after the settings page reloads.
+Update the preference-save path so the selected value is persisted and restored on reload.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Reply with:
   apply     — accept and write to GitLab
@@ -170,13 +169,14 @@ Reply with:
   reject    — discard and log rejection
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</code></pre>
   <p><strong>The proposed-change text above is illustrative.</strong> The agent only
-  supplies the flagged phrases; the actual rewrite is written live by whatever model is
-  behind Bob, grounded in the issue's own text. Expect the same shape (a concrete,
-  testable replacement for "the thing"/"fix it"), not this exact wording.</p>
+  supplies the flagged phrases; the actual rewrite is written live by Bob's built-in
+  model, grounded in the issue's own text. The skill controls when generation is invoked,
+  not which model runs it. Expect the same shape (a concrete, testable replacement for
+  "the thing"/"fix it"), not this exact wording.</p>
   <p><strong>Prompt (edit, to show the edit path, not just apply):</strong></p>
-  <pre><code>edit The settings page silently fails to save the notification preference toggle. Reloading the page always resets it to the default value instead of keeping the saved choice. Fix the save handler so the choice persists across reloads.</code></pre>
-  <p><strong>Expected result:</strong> Bob calls <code>gitlab-issue-writer</code> to
-  update the issue description, logs a telemetry entry (<code>agent: AM, action:
+  <pre><code>edit The notification preference resets to its default after the settings page reloads. Update the preference-save path so the selected value is persisted and restored on reload.</code></pre>
+  <p><strong>Expected result:</strong> Bob calls the guarded review CLI to update the
+  issue description and logs a telemetry entry (<code>agent: AM, action:
   rewrite_desc, outcome: edited</code>), and confirms.</p>
   <p><strong>Fallback:</strong> if you'd rather not compose an edit live,
   <code>apply</code> is a safe substitute; just narrate "I'll accept this one as-is"
@@ -185,9 +185,13 @@ Reply with:
   <h3>Step 6 [CUT]: Acceptance-criteria agent on the same issue</h3>
   <p><strong>Narration:</strong> "Now that the description says something specific, Bob
   can draft real criteria against it instead of guessing."</p>
+  <p><strong>Prompt:</strong></p>
+  <pre><code>rerun audit and review issue #2</code></pre>
+  <p>The rerun is required: the AM write deliberately invalidates the AC finding from the
+  first audit, and stale findings are rejected rather than silently applied.</p>
   <p><strong>Expected Bob response:</strong> issue #2 is labeled Bug, so the AC agent's
   brief targets a Bug template (<code>work-item-format get-template type=Bug</code>) and
-  asks the drafting model to ground 2 to 4 Given-When-Then criteria in the now-updated
+  asks Bob's built-in model to ground 2 to 4 Given-When-Then criteria in the now-updated
   description:</p>
   <pre><code>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔍 [AC] Issue #2: Fix the thing on the settings page
@@ -233,8 +237,7 @@ Accepted:        1  (50%)
 Edited:          1  (50%)
 Rejected:        0  (0%)
 Failed:          0  (write did not reach GitLab — excluded from rates)
-Acceptance rate: 50%     (accepted / total)
-Approval rate:   100%    (accepted + edited) / total</code></pre>
+Acceptance rate: 50%     (accepted / total)</code></pre>
   <p><strong>Narration close:</strong> "Both suggestions were used, one as-is, one
   edited. That's the number that should climb as the team starts trusting this more:
   not features shipped, but suggestions accepted."</p>
@@ -242,7 +245,7 @@ Approval rate:   100%    (accepted + edited) / total</code></pre>
   video.</p>
   <p><strong>Fallback:</strong> if telemetry shows more than 2 total decisions, the
   pre-flight step 2 (delete <code>sdlc-harness-telemetry.jsonl</code>) was skipped; the
-  numbers will still be honest, just not the clean 50/50/100% shown above. Narrate
+  numbers will still be honest, just not the clean 50/50 shown above. Narrate
   whatever the real numbers say rather than the ones printed here.</p>
 
   <hr>
@@ -252,16 +255,16 @@ Approval rate:   100%    (accepted + edited) / total</code></pre>
   problem: relationships between issues, not the wording of any one issue."</p>
   <p><strong>Prompt:</strong></p>
   <pre><code>suggest links</code></pre>
-  <p><strong>Expected Bob response:</strong> a <code>DependencyFinding</code> for 3↔4
-  and 7↔8, each with a <code>relates-to</code> or <code>blocks</code> suggestion and a
-  confidence score. Applying creates the actual GitLab issue link (<code>blocks</code> or
-  <code>relates_to</code>) via the issue-links API — this is a real write, the same as
-  the other agents' findings, not a recommendation-only report.</p>
+  <p><strong>Expected Bob response:</strong> a <code>DependencyFinding</code> for 3↔4,
+  7↔8, and 11↔12, each with a <code>relates-to</code> or <code>blocks</code> suggestion
+  and confidence score. After approval, the guarded review CLI creates the native GitLab
+  link (<code>blocks</code> or <code>relates_to</code>) through the issue-links API. This
+  is a real write and is never performed before approval.</p>
   <p><strong>Prompt:</strong></p>
   <pre><code>check transitions</code></pre>
-  <p><strong>Expected Bob response:</strong> a finding for issue #5, proposing a move to
-  In Review because a merged MR (<code>!1</code>, <code>ci-staging-deploy</code>)
-  references it. Applying writes an updated label.</p>
+  <p><strong>Expected Bob response:</strong> issue #5 proposes In Review and issue #9
+  proposes In Progress because the merged fixture MR references both. Applying uses
+  native label add/remove parameters and preserves unrelated labels.</p>
   <p><strong>Fallback:</strong> neither of these needs to go smoothly on camera; they're
   rehearsal context so the facilitator can talk about them confidently even though
   they're not filmed.</p>

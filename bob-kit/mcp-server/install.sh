@@ -99,7 +99,12 @@ echo "Installing sdlc-harness skill..."
 SKILL_DEST="$BOB_DIR/skills/sdlc-harness"
 
 mkdir -p "$SKILL_DEST"
-cp "$SKILL_SRC/SKILL.md" "$SKILL_SRC/package.json" "$SKILL_SRC/package-lock.json" "$SKILL_DEST/"
+cp "$SKILL_SRC/SKILL.md" \
+  "$SKILL_SRC/install.sh" \
+  "$SKILL_SRC/package.json" \
+  "$SKILL_SRC/package-lock.json" \
+  "$SKILL_SRC/tsconfig.json" \
+  "$SKILL_DEST/"
 cp -r "$SKILL_SRC/dist" "$SKILL_SRC/src" "$SKILL_DEST/"
 echo "✓ Skill copied to $SKILL_DEST"
 
@@ -126,10 +131,11 @@ echo "=============================="
 echo "Installation complete."
 echo ""
 echo "Next steps:"
-echo "  1. Merge GitLab credentials into $PROJECT_ROOT/.env (GITLAB_HOST,"
-echo "     GITLAB_PROJECT, GITLAB_TOKEN — see $MCP_DIR/.env.example)."
-echo "     If that .env already exists (e.g. from an unrelated template),"
-echo "     add these alongside its existing contents — do not overwrite it."
+echo "  1. Configure GitLab credentials in the repository-root $PROJECT_ROOT/.env:"
+echo "     If absent: install -m 600 \"$MCP_DIR/.env.example\" \"$PROJECT_ROOT/.env\""
+echo "     If present, merge GITLAB_HOST, GITLAB_PROJECT, and GITLAB_TOKEN"
+echo "     alongside its existing contents; do not overwrite it."
+echo "     Ensure owner-only permissions: chmod 600 \"$PROJECT_ROOT/.env\""
 echo "  2. Restart Bob to load the sdlc-harness MCP server and mode."
 echo "  3. Activate the 'SDLC Harness' mode in Bob to begin governance."
 echo "  4. When the GitLab Docker instance is ready, run the live smoke test:"

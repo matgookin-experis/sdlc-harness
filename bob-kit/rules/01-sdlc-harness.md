@@ -12,7 +12,8 @@ Project-specific agent behaviors for the sdlc-harness workspace.
 ## Behaviors
 
 - Always check that the GitLab container is running before attempting API operations
-- Use `./gitlab-local/manage.sh seed` to reset demo data to a known state
+- Use `./gitlab-local/manage.sh seed` to reconcile demo fixtures; use
+  `./gitlab-local/manage.sh reset` only for an explicitly approved destructive reset
 - When modifying weather-app files, reflect changes via the seed script — do not edit
   files directly in GitLab
 - Credentials for the demo instance are documented in `gitlab-local/README.md`

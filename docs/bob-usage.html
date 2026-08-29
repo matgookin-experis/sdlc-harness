@@ -78,8 +78,9 @@
   shows a 91.5k/270k-token planning task for exactly this pair of tasks. A separate
   session
   (<a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a>)
-  shows Section 3 (Tasks 27 through 31: Bob mode definition, WatsonX config, MCP registry
-  entry, agent orchestration design, skill unit tests) dispatched to Bob as one batch, at
+  shows Section 3 (Tasks 27 through 31: Bob mode definition, model-usage rationale, MCP
+  registry entry, agent orchestration design, skill unit tests) dispatched to Bob as one
+  batch, at
   1.2M tokens sent and an API cost of 2.41 for that session alone.</p>
 
   <p>Tasks 20 through 26 &mdash; the five agents, the human review interface and the
@@ -126,20 +127,14 @@
   <code>index.html</code>, <code>styles.css</code>, <code>app.js</code>,
   <code>README.md</code>, <code>tests.md</code>, then review and validate all files),
   tracked and checked off inside Bob's Tasks panel
-  (<a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png.png"><code>Prasanna-weather-dashboard-session-summary.png.png</code></a>).</p>
+  (<a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a>).</p>
 
-  <h2>watsonx.ai</h2>
-  <p>The shipped skill's agents call an LLM at exactly two points: the Acceptance
-  Criteria agent and the Ambiguity agent, both when drafting prose grounded in an issue's
-  text (the Dependency, State-transition, and Coverage agents are plain deterministic
-  code and never call a model at all; see the per-agent-role rationale in
-  <code>bob-kit/custom_modes.yaml</code>). That model is
-  <code>ibm/granite-3-3-8b-instruct</code>, wired as Bob's own provider under Settings →
-  Providers → WatsonX (API key, Project ID, and endpoint URL configured there, documented
-  for reinstallation in <code>bob-kit/README.md</code>). The 128k context window is used
-  specifically for the full-backlog Audit path, where Bob has to hold many issues'
-  findings in context at once to compile a single report; single-issue drafting doesn't
-  need it.</p>
+  <h2>Model usage</h2>
+  <p>The skill asks Bob's built-in model to generate content at exactly two points: drafting Acceptance
+  Criteria and rewriting Ambiguity findings, both grounded in issue text. Dependency,
+  State-transition, and Coverage findings are deterministic TypeScript. The skill controls
+  when generation is invoked, not which model Bob runs. The full-backlog Audit summary is
+  the context-heavy step, while individual drafts are single-issue operations.</p>
 
   <h2>What the screenshots show</h2>
   <table>
@@ -155,7 +150,7 @@
       <tr><td><a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a></td><td>Branching and planning the skill scaffold (Task 17)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>
-      <tr><td><a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png.png"><code>Prasanna-weather-dashboard-session-summary.png.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
+      <tr><td><a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a></td><td>Tasks 20-26 built &mdash; five agents, review interface, telemetry (16/16, 9.03 Bobcoins)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a></td><td>Bob reviewing its own output: telemetry, detector and grammar defects fixed, then merged to <code>dev</code> (3/3, 22.34 Bobcoins)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a></td><td>End-to-end verification against a live GitLab through MCP tools only (12/12, 6.42 Bobcoins)</td></tr>

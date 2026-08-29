@@ -1,12 +1,15 @@
 # GitLab Local
 
-Runs a self-hosted GitLab CE instance and a static demo site locally via Docker, with a reproducible demo environment.
+Runs a self-hosted GitLab CE instance and a static demo site locally via Docker,
+with a reproducible demo environment.
 
 ## Requirements
 
 - Docker
 - Docker Compose v2+
-- Python 3 (for the seed script — available on most systems)
+- Bash 3.2+
+- curl
+- Python 3 (used for portable base64, URL encoding, and JSON encoding)
 
 ### Minimum host requirements
 
@@ -29,34 +32,43 @@ CPU than Docker Desktop itself is allowed.
 ```bash
 cd gitlab-local
 
-# 1. Create your local credentials file (gitignored — never committed)
-cp .env.example .env
-#    Edit .env and set GITLAB_ROOT_PASSWORD (minimum 8 characters, no '$' — see Troubleshooting)
+# 1. Create your local credentials file with owner-only permissions
+install -m 600 .env.example .env
+#    Replace both GITLAB_ROOT_PASSWORD and GITLAB_DEMO_PASSWORD placeholders
 
-# 2. Start the stack (first boot takes 3–5 minutes; blocks until healthy or fails)
+# 2. Start the stack, wait until healthy, and run the complete idempotent seed
 ./manage.sh start
 
-# 3. Seed demo data (run once after first boot)
-./manage.sh seed
-
-# 4. Seed intentionally-incomplete demo issues for agent demo
-./manage.sh seed-issues
-
-# 5. Create/refresh the API token used by the MCP server and live tests
+# 3. Create/refresh the API token used by the MCP server and live tests
 ./manage.sh refresh-token
 ```
+
+If `install` is unavailable, run `umask 077` before copying `.env.example`.
 
 Then open **http://localhost:8080** (GitLab) and **http://localhost:8081** (demo site).
 
 ## Credentials
 
-Credentials come from your local `.env` file — set `GITLAB_ROOT_PASSWORD` there.
-The same password is used for both the `root` admin and the `demo` user.
+Credentials come from your local `.env` file. Both values are explicit, must
+contain at least eight characters, and must differ. The seed workflow rejects
+placeholder or identical values.
 
 | Account    | Username | Role      |
 |------------|----------|-----------|
 | Admin      | `root`   | Owner     |
 | Demo user  | `demo`   | Developer |
+
+The accounts use separate settings:
+
+- `GITLAB_ROOT_PASSWORD` configures the initial GitLab administrator password.
+- `GITLAB_DEMO_PASSWORD` configures the non-admin demo account.
+
+`seed.sh` does not silently reuse the administrator password. On normal reruns, it
+synchronizes the existing demo account to `GITLAB_DEMO_PASSWORD`. When an administrator
+`GITLAB_TOKEN` is supplied to avoid Rails startup, the existing password is left unchanged.
+
+Base provisioning also repairs the demo account on every run: it restores a usable
+account state and adds or corrects its group membership to Developer access.
 
 > **Sign in with `root` or `demo`. Do not use "Register now".**
 > `seed.sh` sets `signup_enabled=false` — this is a closed demo instance. If you
@@ -65,20 +77,13 @@ The same password is used for both the `root` admin and the `demo` user.
 > blocked."* That is expected. Sign in as `root` instead; the blocked account can
 > be ignored, or removed from **Admin → Users**.
 
-To see the password you configured:
+Passwords are deliberately not emitted by the seed scripts. Retrieve them from
+the local password store or `.env` without placing them in logs or screen captures.
 
-```bash
-grep GITLAB_ROOT_PASSWORD gitlab-local/.env
-```
-
-If you never set one, GitLab generated an initial root password on first boot:
-
-```bash
-./manage.sh password
-```
-
-That file is deleted automatically 24 hours after the container's first start, so
-if it is gone, set `GITLAB_ROOT_PASSWORD` in `.env` and run `./manage.sh reset -y`.
+On POSIX systems, every helper script refuses to continue when `.env` grants
+group/world permissions. Repair an existing file with `chmod 600 .env`. Git Bash on
+Windows skips the POSIX mode check because Windows ACLs are authoritative there;
+restrict the file to your Windows account instead.
 
 ## Demo Project
 
@@ -101,26 +106,40 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 
 | Command                       | Description                                           |
 |-------------------------------|-------------------------------------------------------|
-| `./smoke.sh`                  | Validate full stack health on demand (exit 0 = OK) — run automatically by `start`/`reset`, but safe to re-run anytime (e.g. after a laptop sleep) |
-| `./manage.sh start`           | Start the stack — blocks until healthy or fails, no need to run `smoke.sh` separately |
+| `./smoke.sh`                  | Validate full stack health on demand (exit 0 = OK); run automatically by `start`, `restart`, and `reset` |
+| `./manage.sh start`           | Start, wait until healthy, and run the complete seed  |
 | `./manage.sh stop`            | Stop the stack                                        |
-| `./manage.sh restart`         | Restart the stack                                     |
-| `./manage.sh seed`            | Seed demo users, group, and project                   |
-| `./manage.sh seed-issues`     | Seed 12 intentionally-incomplete issues for agent demo|
+| `./manage.sh restart`         | Restart, wait until healthy, and run the complete seed|
+| `./manage.sh seed`            | Run the complete idempotent demo seed                  |
 | `./manage.sh refresh-token`   | Rotate and verify the gitignored MCP/API token         |
 | `./manage.sh reset [-y]`      | Full wipe + fresh boot + reseed in one command (see Full Reset below) |
+| `./manage.sh uninstall [-y]`  | Remove the stack, generated state, and Bob/MCP installation |
+| `./manage.sh password`        | Show GitLab's temporary initial root password, if available |
 | `./manage.sh logs`            | Tail container logs                                   |
 | `./manage.sh status`          | Show container health                                 |
 
-All seed scripts are **idempotent** — safe to run multiple times, skip anything that already exists.
+`./manage.sh seed` is the only public seeding operation. It keeps the implementation
+modular by invoking `seed.sh` for base provisioning and then `seed-issues.sh` for
+scenario fixtures. The complete workflow is **idempotent**, and the issue stage converges its
+state-transition fixture to two open issues linked from a genuinely merged MR with a real
+branch commit.
+
+Unless the caller supplies `GITLAB_TOKEN`, `seed.sh` creates one one-day Rails PAT and
+shares it with the internal issue-fixture stage. It keeps the token in owner-only temporary
+files and revokes it from an EXIT cleanup path. Successful completion includes PAT
+revocation and removal of container-side token files.
 
 ## Ports
 
-| Port | Purpose                              |
-|------|--------------------------------------|
-| 8080 | GitLab web UI / API (host → port 80) |
-| 8081 | Demo site — weather app (nginx); override with `DEMO_SITE_PORT` |
-| 2222 | Git over SSH                         |
+| Port | Purpose |
+|---|---|
+| 8080 | GitLab web UI / API (host to container nginx port 80) |
+| 8081 | Demo site (nginx); override with `DEMO_SITE_PORT` |
+| 2222 | Git over SSH |
+
+All published ports bind to `127.0.0.1`; they are not exposed on other host
+interfaces. GitLab's external URL is `http://localhost:8080`, so generated web
+and clone URLs retain the required `:8080` port.
 
 SSH remote URL format:
 ```
@@ -136,10 +155,9 @@ sign in as `root` (see [Credentials](#credentials)). Nothing is broken.
 
 ### `./smoke.sh` reports the demo site is not up
 
-GitLab is fine; the nginx demo site did not bind its port. Almost always a port
-collision — on macOS, Docker Desktop's own helper process binds 8081 on some
-installs, so the container exits immediately and never appears in
-`docker compose ps`.
+The nginx demo site did not bind its port. This is usually a port collision — on
+macOS, Docker Desktop's own helper process binds 8081 on some installs, so the
+container exits immediately and never appears in `docker compose ps`.
 
 ```bash
 lsof -iTCP:8081 -sTCP:LISTEN     # find what holds the port
@@ -152,30 +170,35 @@ echo "DEMO_SITE_PORT=8082" >> .env
 docker compose up -d
 ```
 
-The agents, the MCP tools and every seeded issue work without the demo site — it
-only serves the weather app for the demo video. `smoke.sh` treats it as optional
-and still exits 0 when only GitLab is healthy.
+`smoke.sh` requires GitLab's host-facing sign-in page, GitLab's internal readiness probe,
+and the demo site to pass. A missing or partially initialized service produces a non-zero
+result.
 
 ### Seeding hangs at "Creating API token..."
 
-Both seed scripts mint their token by booting GitLab's Rails console inside the
-container (`gitlab-rails runner`). That boot loads the whole Rails app and is by
-far the heaviest step — on a cold container, or one short on RAM, it can take
-many minutes or appear to hang outright.
+Without a caller-supplied token, the seed workflow mints one token by booting GitLab's
+Rails environment inside the container (`gitlab-rails runner`). That boot is the heaviest
+step and can stall on a long-running or resource-constrained instance. It is now bounded
+to 180 seconds (override with `GITLAB_RAILS_RUNNER_TIMEOUT_SECONDS`) and exits with an
+actionable error instead of hanging indefinitely.
 
-Skip it by supplying your own token. In GitLab (signed in as `root`) go to
+Skip it by supplying an administrator token. In GitLab (signed in as `root`) go to
 **User settings → Access tokens**, create one with the `api` scope, then:
 
 ```bash
 export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
 ./manage.sh seed
-./manage.sh seed-issues
 ```
 
-Both scripts use it directly and never start the Rails console. This is the
-faster and more reliable path on any machine, and worth doing before a demo.
+The public seed operation validates that the token belongs to an administrator and passes
+it to the internal issue-fixture stage. This path does not start Rails and is the most
+reliable option for an already-provisioned demo instance.
 
-For the local demo, the supported automated path is:
+`./manage.sh refresh-token` serves a different purpose: it rotates the non-admin demo
+user token used by Bob's MCP integration. That token cannot perform the administrator
+operations required by the seed workflow.
+
+To refresh the MCP token, run:
 
 ```bash
 ./manage.sh refresh-token
@@ -191,24 +214,28 @@ allocation — GitLab CE wants 4 GB and will thrash below that.
 
 ### The password in `.env` does not work
 
-Check for a `$` in it. Docker Compose interprets `$` as variable interpolation, so
-`GITLAB_ROOT_PASSWORD=abc$123` reaches the container as `abc` followed by an empty
-variable. Use a password without `$`, or escape it as `$$`. GitLab also enforces a
-minimum of 8 characters — a shorter one fails during seeding with
-*"Password is too short"*.
+GitLab enforces a minimum of eight characters. For values containing `$`, keep
+the value single-quoted in `.env` so Docker Compose treats it literally:
 
-After changing the password, existing data still holds the old one. Either reset:
+```dotenv
+GITLAB_ROOT_PASSWORD='replace-with-a-strong-$-password'
+GITLAB_DEMO_PASSWORD='replace-with-another-strong-$-password'
+```
+
+Keep each assignment on one line with no `export` prefix. The scripts parse only
+the named `KEY=value` entries and never execute `.env` as shell code.
+
+Changing `GITLAB_ROOT_PASSWORD` does not update an existing root account. Use
+GitLab's documented administrator password-reset procedure, or reset this disposable
+stack if deleting its data is acceptable:
 
 ```bash
 ./manage.sh reset -y
 ```
 
-or change it in place:
-
-```bash
-docker exec -it gitlab gitlab-rails runner \
-  "u = User.find_by_username('root'); u.password = u.password_confirmation = ENV['NEW_PW']; u.save!"
-```
+After changing `GITLAB_DEMO_PASSWORD`, unset `GITLAB_TOKEN` and rerun
+`./manage.sh seed`; the Rails-free token path intentionally leaves an existing
+demo password unchanged.
 
 ### GitLab returns HTTP 502 for the first few minutes
 
@@ -225,6 +252,76 @@ All GitLab data is stored in named Docker volumes:
 - `gitlab-logs` — `/var/log/gitlab`
 - `gitlab-data` — `/var/opt/gitlab`
 
+The GitLab and nginx images are pinned by digest in `docker-compose.yml`. `GITLAB_IMAGE`
+can temporarily override the GitLab image during a reviewed upgrade path; leave it unset
+for new installations.
+
+## Migrating an Existing Stack
+
+Do not point arbitrary existing GitLab volumes at the pinned image. GitLab upgrades and
+downgrades are version-sensitive; unsupported jumps can make the database unusable.
+
+### Configuration-only migration
+
+Use this path to apply the loopback bindings and `:8080` external URL while keeping the
+exact GitLab image currently running:
+
+1. Back up GitLab data, `/etc/gitlab`, and `gitlab-secrets.json` according to
+   GitLab's Docker backup documentation. Store copies outside the Docker volumes.
+2. Run `chmod 600 .env`, add an explicit `GITLAB_DEMO_PASSWORD`, and replace
+   documented placeholders. Do not expect changing the root value to update the
+   persisted root account.
+3. Record the current version with `docker exec gitlab gitlab-rake gitlab:env:info`.
+4. Record and tag the exact running image:
+
+```bash
+CURRENT_IMAGE_ID="$(docker inspect --format '{{.Image}}' gitlab)"
+docker image tag "$CURRENT_IMAGE_ID" gitlab-local-config-migration:current
+```
+
+5. Set `GITLAB_IMAGE=gitlab-local-config-migration:current` in `.env`, then
+   recreate without pulling another GitLab image:
+
+```bash
+docker compose up -d --no-deps --pull never gitlab
+docker compose up -d --no-deps demo-site
+./smoke.sh
+./manage.sh seed
+```
+
+Keep the override until a separate GitLab image upgrade is completed. `restart` alone
+does not apply changed Compose environment or port mappings.
+
+### GitLab image upgrade
+
+1. Inspect the running version with `docker exec gitlab gitlab-rake gitlab:env:info`.
+2. Inspect the pinned candidate without attaching volumes:
+
+```bash
+docker run --rm --entrypoint cat \
+  gitlab/gitlab-ce@sha256:f63df4c43029fe91db370609c0b40a1e3585cebd06e3e9637d93a9a3030eb86e \
+  /RELEASE
+```
+
+3. Compare the versions against GitLab's official upgrade-path tool and
+   documentation. Do not downgrade, and do not skip required upgrade stops.
+4. Take and verify a fresh application backup plus separate copies of
+   `/etc/gitlab` and `gitlab-secrets.json` before the first upgrade and every
+   required stop. A backup restores only to the same GitLab version and edition.
+5. Set `GITLAB_IMAGE` to the exact reviewed tag or digest for the next required
+   stop, pull that image, and run `docker compose up -d --no-deps gitlab`.
+6. At every stop, wait for GitLab to become healthy and run
+   `docker exec gitlab gitlab-rake gitlab:background_migrations:status`. Continue
+   only after all batched background migrations finish; resolve any pending
+   database migrations or failed health checks.
+7. Repeat one required stop at a time. Only after reaching the pinned version
+   should you remove the `GITLAB_IMAGE` override and recreate from the default digest.
+8. Run `./smoke.sh`. Starting or restarting through `manage.sh` automatically
+   reconciles the complete seed.
+
+Do not use `reset` for either migration path unless deleting all existing GitLab data is
+intentional.
+
 ## Full Reset
 
 To wipe all data and start fresh (e.g. for a clean demo re-take):
@@ -234,16 +331,17 @@ To wipe all data and start fresh (e.g. for a clean demo re-take):
 ./manage.sh reset -y       # skips the confirmation prompt
 ```
 
-This tears down the stack including volumes, boots fresh, waits for GitLab to actually
-answer HTTP (via `smoke.sh` — not just the container's own healthcheck, which reports
-"healthy" well before Rails can serve a request), then re-runs `seed` and `seed-issues`
-— a single idempotent command instead of four manual steps. Equivalent to running by
-hand:
+This tears down the stack including volumes, boots fresh, waits for GitLab's
+host-facing HTTP endpoint and internal readiness via `smoke.sh`, runs the complete
+seed, and refreshes the repository-root MCP token. Equivalent to running by hand:
 
 ```bash
 docker compose down -v
 docker compose up -d
 ./smoke.sh
 ./manage.sh seed
-./manage.sh seed-issues
+./manage.sh refresh-token
 ```
+
+After a reset, unset any previously exported `GITLAB_TOKEN` and restart or reconnect Bob;
+an already-running MCP process still holds the token from before the volumes were deleted.

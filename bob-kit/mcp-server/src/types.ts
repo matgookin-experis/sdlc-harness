@@ -134,6 +134,10 @@ export interface UpdateIssueParams {
   description?: string;
   /** Comma-separated label names for the update API. */
   labels?: string;
+  /** Comma-separated label names to add atomically. */
+  add_labels?: string;
+  /** Comma-separated label names to remove atomically. */
+  remove_labels?: string;
   state_event?: "close" | "reopen";
   assignee_id?: number;
   milestone_id?: number;

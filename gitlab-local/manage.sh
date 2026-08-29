@@ -2,43 +2,54 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=env.sh
+. "$SCRIPT_DIR/env.sh"
 cd "$SCRIPT_DIR"
 
 usage() {
-  echo "Usage: $0 {start|stop|restart|seed|seed-issues|refresh-token|reset|uninstall|password|logs|status}"
+  echo "Usage: $0 {start|stop|restart|seed|refresh-token|reset|uninstall|password|logs|status}"
   exit 1
+}
+
+# `seed.sh` is the sole public entry point and invokes the internal issue-fixture
+# stage with the same API token, avoiding a second Rails boot.
+seed_demo() {
+  echo "Seeding the complete demo environment..."
+  bash "$SCRIPT_DIR/seed.sh"
 }
 
 case "${1:-}" in
   start)
+    require_private_env_file "$SCRIPT_DIR/.env"
     echo "Starting GitLab..."
     docker compose up -d
     # Block until the stack is verifiably ready (or fails) instead of handing
     # control back immediately — smoke.sh polls the sign-in page for up to
     # 300s and exits non-zero if GitLab never comes up.
     bash "$SCRIPT_DIR/smoke.sh"
+    seed_demo
     ;;
   stop)
     echo "Stopping GitLab..."
     docker compose down
     ;;
   restart)
+    require_private_env_file "$SCRIPT_DIR/.env"
     echo "Restarting GitLab..."
     docker compose restart
+    bash "$SCRIPT_DIR/smoke.sh"
+    seed_demo
     ;;
   seed)
-    echo "Running demo seed..."
-    bash "$SCRIPT_DIR/seed.sh"
-    ;;
-  seed-issues)
-    echo "Seeding demo issues..."
-    bash "$SCRIPT_DIR/seed-issues.sh"
+    require_private_env_file "$SCRIPT_DIR/.env"
+    seed_demo
     ;;
   refresh-token)
     echo "Refreshing the local MCP/API token..."
     bash "$SCRIPT_DIR/refresh-api-auth.sh"
     ;;
   reset)
+    require_private_env_file "$SCRIPT_DIR/.env"
     # Idempotent full reset: wipe all GitLab data, boot fresh, wait for health,
     # reseed group/user/project + demo issues. Same commands as the "Full
     # Reset" section in README.md, wrapped into one so demo re-takes are cheap.
@@ -61,8 +72,18 @@ case "${1:-}" in
     # drifted copy of the same polling logic.
     bash "$SCRIPT_DIR/smoke.sh"
     echo "Reseeding..."
-    bash "$SCRIPT_DIR/seed.sh"
-    bash "$SCRIPT_DIR/seed-issues.sh"
+    # A token inherited from the pre-reset database is invalid after volumes
+    # are deleted, so force fresh bootstrap credentials for this seed.
+    (
+      unset GITLAB_TOKEN
+      seed_demo
+    )
+    echo "Refreshing the MCP runtime token..."
+    bash "$SCRIPT_DIR/refresh-api-auth.sh"
+    if [ -n "${GITLAB_TOKEN:-}" ]; then
+      echo "WARNING: Unset the exported GITLAB_TOKEN; it belonged to the deleted GitLab data."
+    fi
+    echo "Restart or reconnect Bob so its MCP process loads the refreshed token."
     echo ""
     echo "Reset complete — stack is back to a known, fully-seeded state."
     ;;
@@ -91,8 +112,8 @@ case "${1:-}" in
     bash "$REPO_ROOT/bob-kit/mcp-server/uninstall.sh" "$REPO_ROOT" -y
     echo ""
     echo "Uninstall complete — repo is back to a freshly-cloned state."
-    echo "To set up again: cp .env.example .env, ./manage.sh start, ./manage.sh seed,"
-    echo "./manage.sh seed-issues, bash bob-kit/mcp-server/install.sh."
+    echo "To set up again: install -m 600 .env.example .env, set both passwords,"
+    echo "./manage.sh start, then bash bob-kit/mcp-server/install.sh."
     ;;
   password)
     echo "Initial root password:"

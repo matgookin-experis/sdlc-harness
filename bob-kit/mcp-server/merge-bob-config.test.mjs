@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import {
@@ -34,6 +36,15 @@ function createBobDir() {
 }
 
 /**
+ * Read a file's POSIX permission bits.
+ * @param {string} path - File path.
+ * @returns {number} Permission bits.
+ */
+function fileMode(path) {
+  return statSync(path).mode & 0o777;
+}
+
+/**
  * Verify MCP JSON merging and failure safety.
  * @returns {void}
  */
@@ -52,6 +63,18 @@ function testMcpMerge() {
     const first = JSON.parse(readFileSync(path, 'utf-8'));
     assert.equal(first.mcpServers.existing.command, 'keep');
     assert.equal(first.mcpServers['sdlc-harness'].command, 'node');
+    assert.equal(
+      first.mcpServers['sdlc-harness'].env.SDLC_ENV_FILE,
+      join(projectRoot, '.env'),
+    );
+    assert.equal(
+      first.mcpServers['sdlc-harness'].env.SDLC_PROJECT_CONFIG,
+      join(projectRoot, '.sdlc-harness.json'),
+    );
+    assert.equal(
+      isAbsolute(first.mcpServers['sdlc-harness'].env.SDLC_PROJECT_CONFIG),
+      true,
+    );
 
     mergeMcpJson(projectRoot, bobDir);
     const second = JSON.parse(readFileSync(path, 'utf-8'));
@@ -63,6 +86,44 @@ function testMcpMerge() {
     assert.equal(readFileSync(path, 'utf-8'), invalid);
   } finally {
     rmSync(dirname(bobDir), { recursive: true, force: true });
+  }
+}
+
+/**
+ * Verify atomic replacements preserve restrictive modes and never exceed 0600.
+ * @returns {void}
+ */
+function testFileModes() {
+  const restrictiveDir = createBobDir();
+  const freshDir = createBobDir();
+  const permissiveDir = createBobDir();
+  const restrictiveMcp = join(restrictiveDir, 'settings', 'mcp.json');
+  const restrictiveModes = join(restrictiveDir, 'settings', 'custom_modes.yaml');
+  const freshMcp = join(freshDir, 'settings', 'mcp.json');
+  const freshModes = join(freshDir, 'settings', 'custom_modes.yaml');
+  const permissiveMcp = join(permissiveDir, 'settings', 'mcp.json');
+
+  try {
+    writeFileSync(restrictiveMcp, '{}');
+    writeFileSync(restrictiveModes, 'customModes: []\n');
+    chmodSync(restrictiveMcp, 0o400);
+    chmodSync(restrictiveModes, 0o400);
+    mergeConfig(projectRoot, restrictiveDir);
+    assert.equal(fileMode(restrictiveMcp), 0o400);
+    assert.equal(fileMode(restrictiveModes), 0o400);
+
+    mergeConfig(projectRoot, freshDir);
+    assert.equal(fileMode(freshMcp), 0o600);
+    assert.equal(fileMode(freshModes), 0o600);
+
+    writeFileSync(permissiveMcp, '{}');
+    chmodSync(permissiveMcp, 0o644);
+    mergeMcpJson(projectRoot, permissiveDir);
+    assert.equal(fileMode(permissiveMcp), 0o600);
+  } finally {
+    rmSync(dirname(restrictiveDir), { recursive: true, force: true });
+    rmSync(dirname(freshDir), { recursive: true, force: true });
+    rmSync(dirname(permissiveDir), { recursive: true, force: true });
   }
 }
 
@@ -228,4 +289,5 @@ testFailureAtomicValidation();
 testMcpUnmerge();
 testModeUnmerge();
 testUnmergeConfig();
+testFileModes();
 process.stdout.write('Bob config merge tests passed.\n');

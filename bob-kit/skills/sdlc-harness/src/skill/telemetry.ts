@@ -1,8 +1,8 @@
 /**
  * telemetry.ts — Suggestion Telemetry (Task 26).
  *
- * Appends one JSON object per accepted, edited, or rejected decision to
- * `sdlc-harness-telemetry.jsonl` in the current working directory.
+ * Appends one JSON object per accepted, edited, rejected, or failed decision to
+ * `sdlc-harness-telemetry.jsonl` beside the selected project config.
  *
  * Rules:
  *  - APPEND ONLY — never truncates or overwrites the file.
@@ -17,6 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import type { TelemetryEntry } from '../models';
+import { resolveProjectConfigPath } from './onboard';
 
 // ---------------------------------------------------------------------------
 // File path
@@ -24,13 +25,15 @@ import type { TelemetryEntry } from '../models';
 
 /**
  * Resolve the telemetry file path.
- * Defaults to `sdlc-harness-telemetry.jsonl` in the working directory.
+ * Defaults beside the selected project config so telemetry cannot mix projects.
  * Override via the SDLC_TELEMETRY_PATH env var for tests.
  */
 export function resolveTelemetryPath(): string {
-  return (
-    process.env['SDLC_TELEMETRY_PATH'] ??
-    path.join(process.cwd(), 'sdlc-harness-telemetry.jsonl')
+  const override = process.env['SDLC_TELEMETRY_PATH'];
+  if (override) return path.resolve(override);
+  return path.join(
+    path.dirname(resolveProjectConfigPath()),
+    'sdlc-harness-telemetry.jsonl',
   );
 }
 
@@ -85,7 +88,7 @@ export async function readTelemetry(): Promise<TelemetryEntry[]> {
 // ---------------------------------------------------------------------------
 
 export interface AcceptanceRateSummary {
-  /** Decisions that reached GitLab (accepted + edited + rejected) — excludes failed. */
+  /** Completed review decisions (accepted + edited + rejected) — excludes failed. */
   total: number;
   accepted: number;
   edited: number;
@@ -95,10 +98,8 @@ export interface AcceptanceRateSummary {
    * Excluded from `total` and from all rate calculations.
    */
   failed: number;
-  /** accepted / total — or 0 if total is 0. */
+  /** accepted / (accepted + edited + rejected), or 0 when there are no decisions. */
   acceptanceRate: number;
-  /** (accepted + edited) / total — or 0 if total is 0. */
-  approvalRate: number;
 }
 
 /**
@@ -120,7 +121,7 @@ export function computeAcceptanceRate(
   const total = accepted + edited + rejected;
 
   if (total === 0) {
-    return { total: 0, accepted: 0, edited: 0, rejected: 0, failed, acceptanceRate: 0, approvalRate: 0 };
+    return { total: 0, accepted: 0, edited: 0, rejected: 0, failed, acceptanceRate: 0 };
   }
 
   return {
@@ -130,6 +131,5 @@ export function computeAcceptanceRate(
     rejected,
     failed,
     acceptanceRate: accepted / total,
-    approvalRate: (accepted + edited) / total,
   };
 }

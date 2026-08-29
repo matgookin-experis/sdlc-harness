@@ -1,6 +1,7 @@
 import type { IssueInput, ProjectConfig, AgentFinding, DraftBrief } from '../models';
 
-const AC_HEADINGS = [/acceptance.criteria/i, /##\s*ac\b/i, /##\s*criteria/i];
+const AC_HEADING = /^\s{0,3}(?:#{1,6}\s+|\*\*\s*)?(?:acceptance criteria|ac|criteria)(?:\s*\*\*)?\s*:?\s*$/i;
+const MARKDOWN_HEADING = /^\s{0,3}#{1,6}\s+/;
 
 /**
  * Real acceptance criteria are structured — each clause opens its own line.
@@ -8,16 +9,34 @@ const AC_HEADINGS = [/acceptance.criteria/i, /##\s*ac\b/i, /##\s*criteria/i];
  * "Given the deadline is tight, when we ship this, then keep scope small."
  */
 function hasStructuredGWT(text: string): boolean {
-  return (
-    /^\s*(\*\*)?given\b/im.test(text) &&
-    /^\s*(\*\*)?when\b/im.test(text) &&
-    /^\s*(\*\*)?then\b/im.test(text)
+  const clause = (keyword: string): RegExp => new RegExp(
+    `^\\s*(?:[-*]\\s+)?(?:\\*\\*)?${keyword}(?:\\*\\*)?\\b`,
+    'im',
   );
+  return (
+    clause('given').test(text) &&
+    clause('when').test(text) &&
+    clause('then').test(text)
+  );
+}
+
+/** Return true when an AC heading has substantive content before the next heading. */
+function hasPopulatedAcSection(text: string): boolean {
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!AC_HEADING.test(lines[index])) continue;
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const line = lines[next].trim();
+      if (MARKDOWN_HEADING.test(lines[next])) break;
+      if (line.length > 0) return true;
+    }
+  }
+  return false;
 }
 
 export function hasAcceptanceCriteria(description: string | null): boolean {
   if (!description || !description.trim()) return false;
-  return AC_HEADINGS.some((re) => re.test(description)) || hasStructuredGWT(description);
+  return hasPopulatedAcSection(description) || hasStructuredGWT(description);
 }
 
 /** Label vocabulary shared with the work-item-format MCP tool. */
@@ -108,5 +127,7 @@ export async function runAcAgent(
     suggestedValue: undraftedPlaceholder(issue),
     draft: buildBrief(issue),
     reason: 'No acceptance criteria found in the description.',
+    originalDescription: issue.description,
+    ...(issue.updatedAt === undefined ? {} : { originalUpdatedAt: issue.updatedAt }),
   };
 }

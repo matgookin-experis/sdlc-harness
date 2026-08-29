@@ -73,7 +73,19 @@ const argsSchema = z.discriminatedUnion("action", [
     target_iid: z.number().int().min(1).describe("IID of the related/dependent issue."),
     link_type: z.enum(["relates-to", "blocks"]).describe("Relationship to create."),
   }),
-]);
+]).superRefine((args, refinement) => {
+  if (
+    args.action === 'update-issue' &&
+    args.labels !== undefined &&
+    (args.add_labels !== undefined || args.remove_labels !== undefined)
+  ) {
+    refinement.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '`labels` cannot be combined with `add_labels` or `remove_labels`.',
+      path: ['labels'],
+    });
+  }
+});
 
 type Args = z.infer<typeof argsSchema>;
 
@@ -111,36 +123,6 @@ async function checkDuplicate(
       return { isDuplicate: false };
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Label merge helper
-// ---------------------------------------------------------------------------
-
-async function resolveLabels(
-  iid: number,
-  opts: {
-    labels?: string[];
-    add_labels?: string[];
-    remove_labels?: string[];
-  },
-  context: ToolContext
-): Promise<string | undefined> {
-  if (opts.labels !== undefined) {
-    // Full replacement
-    return opts.labels.join(",");
-  }
-
-  if (opts.add_labels?.length || opts.remove_labels?.length) {
-    // Partial update — fetch current labels
-    const issue = await context.gitlab.getIssue(iid);
-    const current = new Set(issue.labels);
-    for (const l of opts.add_labels ?? []) current.add(l);
-    for (const l of opts.remove_labels ?? []) current.delete(l);
-    return [...current].join(",");
-  }
-
-  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,20 +167,12 @@ export const gitlabIssueWriterTool: ToolDefinition<typeof argsSchema> = {
       }
 
       case "update-issue": {
-        const labelString = await resolveLabels(
-          args.iid,
-          {
-            labels: args.labels,
-            add_labels: args.add_labels,
-            remove_labels: args.remove_labels,
-          },
-          context
-        );
-
         return gitlab.updateIssue(args.iid, {
           title: args.title,
           description: args.description,
-          labels: labelString,
+          labels: args.labels?.join(','),
+          add_labels: args.add_labels?.join(','),
+          remove_labels: args.remove_labels?.join(','),
           milestone_id: args.milestone_id,
           assignee_id: args.assignee_id,
         });

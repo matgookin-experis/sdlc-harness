@@ -29,19 +29,21 @@
   <hr>
 
   <h2>What onboarding must persist</h2>
-  <p>After the user answers all four onboarding questions, the skill must write a
+  <p>After the user answers all four onboarding questions, the onboarding CLI must write a
   <code>.sdlc-harness.json</code> file to the repository root with this schema:</p>
   <pre><code>{
+  "provider":        "gitlab",
   "projectUrl":      "http://localhost:8080/sdlc-harness/weather-dashboard",
   "workItemTypes":   ["Story", "Bug", "Task"],
   "workflowStates":  ["Open", "In Progress", "In Review", "Done"],
   "transitionRules": {
     "Open":       ["In Progress"],
-    "In Progress": ["In Review", "Open"],
-    "In Review":  ["Done", "In Progress"]
+    "In Progress": ["In Review"],
+    "In Review":  ["Done"],
+    "Done":       []
   }
 }</code></pre>
-  <p>All four top-level fields are required. The skill must reject (with an actionable
+  <p>All five top-level fields are required after persistence. The CLI must reject (with an actionable
   error message) any configuration where <code>projectUrl</code> is empty or
   <code>workflowStates</code> is an empty array.</p>
 
@@ -52,7 +54,7 @@
 
   <h3>1. Config file created</h3>
   <pre><code>cat .sdlc-harness.json</code></pre>
-  <p>Expected: valid JSON containing <code>projectUrl</code>, <code>workItemTypes</code>,
+  <p>Expected: valid JSON containing <code>provider</code>, <code>projectUrl</code>, <code>workItemTypes</code>,
   <code>workflowStates</code>, and <code>transitionRules</code> matching the values you
   provided.</p>
   <p><strong>Fail condition:</strong> file does not exist, or is empty, or is not valid
@@ -60,10 +62,11 @@
 
   <hr>
 
-  <h3>2. All four required fields are present</h3>
+  <h3>2. All five required fields are present</h3>
   <table>
     <thead><tr><th>Field</th><th>Type</th><th>Requirement</th></tr></thead>
     <tbody>
+      <tr><td><code>provider</code></td><td>string</td><td>Exactly <code>gitlab</code></td></tr>
       <tr><td><code>projectUrl</code></td><td>string</td><td>Non-empty URL</td></tr>
       <tr><td><code>workItemTypes</code></td><td>string[]</td><td>At least one entry</td></tr>
       <tr><td><code>workflowStates</code></td><td>string[]</td><td>At least two entries</td></tr>
@@ -74,6 +77,7 @@
   <pre><code>python3 -c "
 import json, sys
 c = json.load(open('.sdlc-harness.json'))
+assert c.get('provider') == 'gitlab', 'provider must be gitlab'
 assert c.get('projectUrl'), 'projectUrl missing or empty'
 assert c.get('workItemTypes'), 'workItemTypes missing or empty'
 assert len(c.get('workflowStates', [])) >= 2, 'workflowStates needs at least 2 entries'
@@ -86,9 +90,8 @@ print('OK — all required fields present')
   <h3>3. Idempotent re-run does not error</h3>
   <p>Re-run the onboarding with the same values (or say <code>re-onboard</code> in
   Bob):</p>
-  <p>Expected: Bob detects the existing config, reports "already onboarded", and either
-  skips or offers to overwrite; it does <strong>not</strong> crash or duplicate the file
-  content.</p>
+  <p>Expected: the CLI validates and atomically replaces the file with the same normalized
+  content; it does <strong>not</strong> crash, append, or duplicate content.</p>
 
   <hr>
 
@@ -98,11 +101,9 @@ print('OK — all required fields present')
   <pre><code>✅ Onboarding complete. Governing: sdlc-harness/weather-dashboard
 
 What would you like to do?
-  • Audit
-  • Draft
-  • Link
-  • Transition
-  • Template</code></pre>
+  • Audit all open issues
+  • Review and apply a finding
+  • Show the telemetry summary</code></pre>
   <p><strong>Fail condition:</strong> Bob asks for the project URL again on the next
   message, or throws an error about missing config when the user types
   <code>audit</code>.</p>
@@ -137,14 +138,17 @@ What would you like to do?
 
   <hr>
 
-  <h3>7. MCP server is reachable using the persisted config</h3>
+  <h3>7. Scoped audit and review runtime is reachable using the persisted config</h3>
   <p>After onboarding, trigger an action that requires a live GitLab call (e.g.
   <code>audit</code> or <code>Draft for issue #1</code>). Bob must successfully reach
-  the GitLab API using the <code>projectUrl</code> from <code>.sdlc-harness.json</code>.</p>
+  the GitLab API using the <code>projectUrl</code> from <code>.sdlc-harness.json</code>.
+  Any conflicting <code>GITLAB_HOST</code> or <code>GITLAB_PROJECT</code> value must fail closed.</p>
   <p><strong>Check:</strong></p>
   <ul>
     <li>Bob lists at least one open issue from the seeded project.</li>
     <li>No "Unauthorized" or "Not Found" errors appear.</li>
+    <li>Each finding is presented with apply/edit/skip/reject choices, and no GitLab
+    write occurs until the user chooses apply or edit.</li>
   </ul>
   <p>If this step fails, check <code>GITLAB_TOKEN</code> in the repo-root
   <code>.env</code> (not <code>bob-kit/mcp-server/.env</code> — that file isn't what Bob's
@@ -167,7 +171,7 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
       <tr><td>4. Monitoring-ready state</td><td>Governance menu offered without re-prompting</td></tr>
       <tr><td>5. Validation errors actionable</td><td>Error names the offending field; file not written</td></tr>
       <tr><td>6. Config survives Bob restart</td><td>Audit works without re-onboarding</td></tr>
-      <tr><td>7. MCP server reachable</td><td>At least one live issue returned; no auth errors</td></tr>
+      <tr><td>7. Scoped audit/review reachable</td><td>Live issue returned; guarded review shown; no auth or scope errors</td></tr>
     </tbody>
   </table>
 </main>

@@ -27,7 +27,7 @@
   <h3>✅ DO:</h3>
   <ul>
     <li>✅ Use environment variables for ALL credentials</li>
-    <li>✅ Copy <code>.env.example</code> to <code>.env</code> and add your credentials there</li>
+    <li>✅ Create <code>.env</code> with <code>install -m 600 .env.example .env</code> and add your credentials there</li>
     <li>✅ Keep <code>.env</code> in <code>.gitignore</code> (already configured)</li>
     <li>✅ Use <code>process.env.VARIABLE_NAME</code> in your code</li>
     <li>✅ Review your commits before pushing (<code>git diff</code>)</li>
@@ -62,7 +62,8 @@
 
   <h3>Protection:</h3>
   <ul>
-    <li><code>.bobignore</code> prevents Bob from logging credential patterns</li>
+    <li><code>.bobignore</code> blocks Bob from reading matched credential files; it does
+    not protect credentials manually pasted into a prompt</li>
     <li><code>.gitignore</code> prevents session files from being committed</li>
     <li>But YOU must not share credentials in prompts!</li>
   </ul>
@@ -70,26 +71,17 @@
   <h2>🚨 What Happens if You Expose Credentials?</h2>
   <p>If you accidentally commit credentials:</p>
   <ol>
-    <li>Your IBM Cloud account will be suspended immediately</li>
-    <li>You must remove the credential from repository history</li>
-    <li>You must rotate/revoke the exposed credential</li>
-    <li>Your account will be restored after verification</li>
+    <li>Revoke or rotate the exposed credential immediately</li>
+    <li>Remove it from repository history and any copied logs or artifacts</li>
+    <li>Review provider audit logs for unauthorized use</li>
+    <li>Notify the project owner and follow the provider's incident process</li>
   </ol>
 
   <h2>📝 How to Use Environment Variables</h2>
 
   <h3>Node.js / JavaScript</h3>
-  <pre><code>require("dotenv").config();
-const apiKey = process.env.IBM_CLOUD_API_KEY;</code></pre>
-
-  <h3>Python</h3>
-  <pre><code>import os
-from dotenv import load_dotenv
-load_dotenv()
-api_key = os.getenv('IBM_CLOUD_API_KEY')</code></pre>
-
-  <h3>Java</h3>
-  <pre><code>String apiKey = System.getenv("IBM_CLOUD_API_KEY");</code></pre>
+  <pre><code>// The sdlc-harness server loads its owner-only .env through src/env.ts.
+const gitlabToken = process.env.GITLAB_TOKEN;</code></pre>
 
   <h2>🔍 Before You Commit Checklist</h2>
   <ul>

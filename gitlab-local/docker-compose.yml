@@ -1,5 +1,5 @@
 # Credentials are read from a gitignored .env file in this directory.
-# Copy .env.example to .env and set GITLAB_ROOT_PASSWORD before starting.
+# Create .env from .env.example with mode 0600 and set both passwords.
 #
 # NOTE: public sign-up is disabled via the GitLab Application Settings API in
 # seed.sh, not here. `signup_enabled` is an ApplicationSetting DB column with
@@ -10,23 +10,23 @@
 
 services:
   gitlab:
-    image: gitlab/gitlab-ce:latest
+    image: "${GITLAB_IMAGE:-gitlab/gitlab-ce@sha256:f63df4c43029fe91db370609c0b40a1e3585cebd06e3e9637d93a9a3030eb86e}"
     container_name: gitlab
     restart: unless-stopped
     hostname: localhost
     environment:
-      GITLAB_ROOT_PASSWORD: "${GITLAB_ROOT_PASSWORD}"
+      GITLAB_ROOT_PASSWORD: "${GITLAB_ROOT_PASSWORD:?Set GITLAB_ROOT_PASSWORD in gitlab-local/.env}"
       GITLAB_OMNIBUS_CONFIG: |
-        external_url 'http://localhost'
+        external_url 'http://localhost:8080'
+        nginx['listen_port'] = 80
         gitlab_rails['gitlab_shell_ssh_port'] = 2222
-        gitlab_rails['initial_root_password'] = "${GITLAB_ROOT_PASSWORD}"
         # Reduce memory usage for local development
         puma['worker_processes'] = 2
         sidekiq['concurrency'] = 5
         prometheus_monitoring['enable'] = false
     ports:
-      - '8080:80'
-      - '2222:22'
+      - '127.0.0.1:8080:80'
+      - '127.0.0.1:2222:22'
     volumes:
       - gitlab-config:/etc/gitlab
       - gitlab-logs:/var/log/gitlab
@@ -34,14 +34,14 @@ services:
     shm_size: '256m'
 
   demo-site:
-    image: nginx:alpine
+    image: nginx@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913
     container_name: demo-site
     restart: unless-stopped
     ports:
       # Overridable because 8081 is a common collision on macOS — Docker
       # Desktop's own helper process binds it on some installs. Set
       # DEMO_SITE_PORT in .env if this port is taken.
-      - '${DEMO_SITE_PORT:-8081}:80'
+      - '127.0.0.1:${DEMO_SITE_PORT:-8081}:80'
     volumes:
       - ../weather-app:/usr/share/nginx/html:ro
 

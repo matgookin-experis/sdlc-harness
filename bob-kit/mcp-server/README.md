@@ -50,11 +50,13 @@ npm run build
 ### 2. Configure credentials
 
 ```bash
-cp .env.example .env
-# Edit .env — add GITLAB_HOST, GITLAB_PROJECT, GITLAB_TOKEN
+# From the repository root (first-time setup only):
+install -m 600 bob-kit/mcp-server/.env.example .env
+# Edit the repository-root .env and add GITLAB_HOST, GITLAB_PROJECT, GITLAB_TOKEN
 ```
 
-The `.env` file is gitignored. **Never commit credentials.**
+If `.env` already exists, do not overwrite it; run `chmod 600 .env` instead. The
+repository-root `.env` file is gitignored. **Never commit credentials.**
 
 ### 3. Run the smoke test (mock — no GitLab needed)
 
@@ -67,6 +69,9 @@ npm run smoke
 ```bash
 SDLC_SMOKE_LIVE=true npm run smoke
 ```
+
+Live mode loads the repository-root `.env` (or `SDLC_ENV_FILE`) and exits with an error
+when credentials are missing or the selected file is group/world readable on POSIX.
 
 ### 5. Install into Bob (merges config without overwriting)
 
@@ -97,7 +102,7 @@ bash bob-kit/mcp-server/install.sh /absolute/path/to/sdlc-harness
 | `GITLAB_HOST` | ✅ | GitLab instance URL, e.g. `https://gitlab.example.com` |
 | `GITLAB_PROJECT` | ✅ | Project path or numeric ID, e.g. `mygroup/myproject` |
 | `GITLAB_TOKEN` | ✅ | Personal Access Token with `api` scope |
-| `SDLC_ENV_FILE` | — | Path to env file (default: `.env` in working dir) |
+| `SDLC_ENV_FILE` | — | Path to env file (default: repository-root `.env`) |
 | `SDLC_DEBUG` | — | Set `true` to enable verbose stderr debug output |
 | `SDLC_SMOKE_LIVE` | — | Set `true` to run live GitLab checks in smoke test |
 

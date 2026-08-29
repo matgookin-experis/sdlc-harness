@@ -10,11 +10,22 @@
 // Project configuration (persisted by onboarding, Task 18)
 // ---------------------------------------------------------------------------
 
+export const MR_ACTIVITY_HORIZON_DAYS = 90;
+
 export interface TransitionRules {
   [fromState: string]: string[];
 }
 
+export interface StateMapping {
+  open?: string;
+  inProgress?: string;
+  inReview?: string;
+  done?: string;
+}
+
 export interface ProjectConfig {
+  /** Project-management provider. This harness currently supports GitLab only. */
+  provider: 'gitlab';
   /** GitLab project URL, e.g. "http://localhost:8080/sdlc-harness/weather-dashboard" */
   projectUrl: string;
   /** Work item types in use, e.g. ["Story", "Bug", "Task", "Epic"] */
@@ -28,6 +39,8 @@ export interface ProjectConfig {
    * The local GitLab CE demo leaves this false and uses relates-to links.
    */
   blockingIssueLinks?: boolean;
+  /** Optional explicit mapping from workflow concepts to configured state names. */
+  stateMapping?: StateMapping;
   /** Optional test-coverage linkage config (Task 24 — P1, disabled by default). */
   coverage?: CoverageConfig;
 }
@@ -44,6 +57,8 @@ export interface IssueInput {
   labels: string[];
   state: string;
   assignee: unknown | null;
+  /** GitLab updated_at value used to reject stale audit findings when available. */
+  updatedAt?: string;
 }
 
 export interface MRInput {
@@ -52,6 +67,8 @@ export interface MRInput {
   description: string | null;
   state: string;
   mergedAt?: string | null;
+  /** GitLab updated_at value used to enforce the audit query horizon. */
+  updatedAt?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,7 +97,7 @@ export interface DraftBrief {
 
 export interface AgentFinding {
   /** Agent that produced this finding. */
-  agent: AgentTag;
+  agent: Exclude<AgentTag, 'DEP'>;
   /** The issue this finding relates to. */
   issueIid: number;
   /**
@@ -101,6 +118,10 @@ export interface AgentFinding {
   draft?: DraftBrief;
   /** Human-readable explanation of why this finding was raised. Optional. */
   reason?: string;
+  /** Description observed during audit, required before a description write. */
+  originalDescription?: string | null;
+  /** Issue updated_at observed during audit, checked before a description write when present. */
+  originalUpdatedAt?: string;
 }
 
 /**
@@ -146,12 +167,18 @@ export interface ReviewOptions {
 }
 
 export interface ReviewResult {
-  /** Whether the GitLab writer adapter was called. */
+  /** Legacy success flag retained for existing callers. */
   gitlabWriteCalled: boolean;
+  /** Whether the requested GitLab mutation completed successfully. */
+  gitlabWriteSucceeded: boolean;
   /** The value actually written (finding's suggestion or the edited value). */
   writtenValue?: string;
   /** Safe diagnostic when the GitLab write did not complete. */
   error?: string;
+  /** Whether the decision telemetry entry was persisted. */
+  telemetryRecorded: boolean;
+  /** Non-fatal diagnostic, including telemetry failure after a successful write. */
+  warning?: string;
   /** Telemetry entry appended for this decision. */
   telemetryEntry: TelemetryEntry;
 }
@@ -173,7 +200,7 @@ export interface TelemetryEntry {
   outcome: ReviewOutcome;
   /**
    * Fields that were edited (empty array for 'accepted' / 'rejected').
-   * Only 'description' is used in the current agent set.
+   * Current values are description, state, and linkType.
    */
   editedFields: string[];
 }
@@ -192,4 +219,35 @@ export interface CoverageConfig {
 export interface CoverageFinding extends AgentFinding {
   agent: 'COV';
   action: 'missing_coverage';
+}
+
+// ---------------------------------------------------------------------------
+// Audit controller types
+// ---------------------------------------------------------------------------
+
+export interface AuditFinding {
+  id: string;
+  finding: AnyFinding;
+}
+
+export interface AuditReviewGroup {
+  issueIid: number;
+  findingIds: string[];
+  hasConflict: boolean;
+  conflictReasons: string[];
+}
+
+export interface AuditResult {
+  timestamp: string;
+  scope: {
+    provider: 'gitlab';
+    projectUrl: string;
+  };
+  agentsRun: AgentTag[];
+  issues: IssueInput[];
+  mergeRequestCount: number;
+  mergeRequestHorizonStart: string;
+  coverageFilesScanned?: string[];
+  findings: AuditFinding[];
+  reviewGroups: AuditReviewGroup[];
 }

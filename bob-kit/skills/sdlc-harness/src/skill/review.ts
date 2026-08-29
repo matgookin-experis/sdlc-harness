@@ -17,6 +17,8 @@
  *    ('accepted' / 'edited') is logged directly because no write is attempted.
  *  - `rejectFinding(finding)` → does NOT write to GitLab; logs outcome = 'rejected'.
  *  - Skip is NOT handled here — skip is neutral and must not be logged.
+ *  - Telemetry-only decisions fail when telemetry cannot be persisted.
+ *    Telemetry errors never erase a successful GitLab write result.
  *
  * Finding types accepted:
  *  - AgentFinding (AC, AM, ST, COV agents) — written via the GitLab writer adapter.
@@ -65,7 +67,7 @@ export function _resetSessionTracker(): void {
 
 /** Type guard — true when the finding is a DependencyFinding. */
 function isDependencyFinding(f: AnyFinding): f is DependencyFinding {
-  return (f as DependencyFinding).sourceIid !== undefined;
+  return f.agent === 'DEP';
 }
 
 /**
@@ -73,7 +75,7 @@ function isDependencyFinding(f: AnyFinding): f is DependencyFinding {
  * Used for telemetry when the user edits the suggestion.
  */
 function editedFieldsFor(finding: AnyFinding): string[] {
-  if (isDependencyFinding(finding)) return [];
+  if (isDependencyFinding(finding)) return ['linkType'];
   switch ((finding as AgentFinding).action) {
     case 'draft_ac':         return ['description'];
     case 'rewrite_desc':     return ['description'];
@@ -92,6 +94,28 @@ function isWritable(finding: AnyFinding): boolean {
   if (isDependencyFinding(finding)) return true;
   const action = (finding as AgentFinding).action;
   return action === 'draft_ac' || action === 'rewrite_desc' || action === 'state_transition';
+}
+
+/** Persist telemetry, failing telemetry-only decisions without hiding GitLab truth. */
+async function recordTelemetry(
+  entry: TelemetryEntry,
+  telemetryOnly: boolean,
+  didWrite: boolean,
+): Promise<{ telemetryRecorded: boolean; warning?: string }> {
+  try {
+    await appendTelemetry(entry);
+    return { telemetryRecorded: true };
+  } catch {
+    if (telemetryOnly) {
+      throw new Error('Telemetry could not be recorded.');
+    }
+    return {
+      telemetryRecorded: false,
+      warning: didWrite
+        ? 'GitLab write succeeded, but telemetry could not be recorded.'
+        : 'Telemetry could not be recorded.',
+    };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +138,28 @@ export async function applyFinding(
   options: ReviewOptions,
   adapter: GitLabWriterAdapter = defaultWriterAdapter
 ): Promise<ReviewResult> {
+  if (
+    typeof options.editedValue === 'string' &&
+    options.editedValue.trim().length === 0
+  ) {
+    throw new Error('Edited values must not be blank.');
+  }
+  if (
+    isDependencyFinding(finding) &&
+    options.editedValue !== null &&
+    options.editedValue !== 'blocks' &&
+    options.editedValue !== 'relates-to'
+  ) {
+    throw new Error('Edited dependency link type must be "blocks" or "relates-to".');
+  }
+  if (
+    !isDependencyFinding(finding) &&
+    (finding.action === 'draft_ac' || finding.action === 'rewrite_desc') &&
+    !Object.hasOwn(finding, 'originalDescription')
+  ) {
+    throw new Error('Description findings must carry the originalDescription audit value.');
+  }
+
   // Agents hand over a brief, not prose. If the brief is still attached the drafter
   // never ran and suggestedValue is a placeholder; writing it would put filler on the
   // issue and log it as a success. An edited value means a human supplied the text.
@@ -151,7 +197,8 @@ export async function applyFinding(
   let writeError: string | undefined;
   let outcome: 'accepted' | 'edited' | 'failed';
 
-  if (isWritable(finding)) {
+  const writable = isWritable(finding);
+  if (writable) {
     const valueToWrite = options.editedValue ?? (
       isDependencyFinding(finding)
         ? finding.suggestedLinkType
@@ -198,13 +245,15 @@ export async function applyFinding(
     editedFields: outcome === 'edited' ? editedFieldsFor(finding) : [],
   };
 
-  await appendTelemetry(telemetryEntry);
+  const telemetry = await recordTelemetry(telemetryEntry, !writable, gitlabWriteCalled);
 
   return {
     gitlabWriteCalled,
+    gitlabWriteSucceeded: gitlabWriteCalled,
     writtenValue,
     error: writeError,
     telemetryEntry,
+    ...telemetry,
   };
 }
 
@@ -237,10 +286,12 @@ export async function rejectFinding(
     editedFields: [],
   };
 
-  await appendTelemetry(telemetryEntry);
+  const telemetry = await recordTelemetry(telemetryEntry, true, false);
 
   return {
     gitlabWriteCalled: false,
+    gitlabWriteSucceeded: false,
     telemetryEntry,
+    ...telemetry,
   };
 }

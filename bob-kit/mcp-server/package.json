@@ -8,9 +8,10 @@
     "build": "tsc --project tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "smoke": "node dist/smoke.js && node merge-bob-config.test.mjs",
+    "smoke": "node dist/smoke.js && node dist/tools/sdlc-review-decision.test.js && node merge-bob-config.test.mjs",
     "test:config": "node merge-bob-config.test.mjs",
     "test:templates": "node dist/tools/work-item-format.test.js",
+    "test:review": "node dist/tools/sdlc-review-decision.test.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src *.mjs"
   },

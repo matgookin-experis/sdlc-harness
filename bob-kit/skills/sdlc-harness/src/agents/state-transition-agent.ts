@@ -1,166 +1,171 @@
-/**
- * state-transition-agent.ts — State Transition Agent (Task 23).
- *
- * Correlates an issue's current state with merge-request activity and the
- * project's configured transition rules, then proposes a valid next state.
- *
- * Rules:
- *  - Only proposes a transition allowed by `config.transitionRules`.
- *  - Never proposes the same state the issue is already in.
- *  - Never writes to GitLab — proposals only.
- *  - Returns null when no signal or no valid transition is found.
- *
- * Signal mapping:
- *  - MR state "merged"  → propose "In Review" (work landed, awaiting review)
- *  - MR state "opened"  → propose "In Progress" (active development)
- *  - No linked MRs      → no signal, return null
- *
- * The agent normalises GitLab's "opened" state to "Open" for comparison
- * against the project's configured workflow states.
- */
+/** Propose one legal workflow edge based on merge-request activity. */
 
-import type { IssueInput, MRInput, ProjectConfig, AgentFinding } from '../models';
+import { MR_ACTIVITY_HORIZON_DAYS } from '../models';
+import type { AgentFinding, IssueInput, MRInput, ProjectConfig } from '../models';
 
-// ---------------------------------------------------------------------------
-// State normalisation
-// ---------------------------------------------------------------------------
-
-/**
- * Map GitLab API state strings to the canonical configured state names.
- * GitLab uses "opened"/"closed"; the project config may use "Open"/"Done".
- */
-function normaliseState(gitlabState: string, configStates: string[]): string {
-  const lower = gitlabState.toLowerCase();
-
-  // Direct case-insensitive match first
-  const direct = configStates.find((s) => s.toLowerCase() === lower);
-  if (direct) return direct;
-
-  // Common alias map
-  if (lower === 'opened') {
-    return configStates.find((s) => /^open$/i.test(s)) ?? gitlabState;
-  }
-  if (lower === 'closed') {
-    return configStates.find((s) => /^(done|closed|complete)/i.test(s)) ?? gitlabState;
-  }
-
-  return gitlabState;
-}
-
-// ---------------------------------------------------------------------------
-// MR → activity signal
-// ---------------------------------------------------------------------------
+export type WorkflowConcept = 'open' | 'inProgress' | 'inReview' | 'done';
 
 type ActivitySignal = 'mr_merged' | 'mr_open' | 'none';
 
-/**
- * Derive the strongest activity signal from the provided MR list.
- * "merged" beats "opened" because it represents completed work.
- */
-function deriveSignal(mrs: MRInput[]): ActivitySignal {
-  if (mrs.some((mr) => mr.state === 'merged')) return 'mr_merged';
-  if (mrs.some((mr) => mr.state === 'opened')) return 'mr_open';
-  return 'none';
-}
-
-// ---------------------------------------------------------------------------
-// Target state resolution
-// ---------------------------------------------------------------------------
-
-/** Signal → preferred next state (canonical name as used in config). */
-const SIGNAL_TARGET: Record<ActivitySignal, string | null> = {
-  mr_merged: 'In Review',
-  mr_open: 'In Progress',
-  none: null,
+const STATE_ALIASES: Record<WorkflowConcept, RegExp[]> = {
+  open: [/^open$/i, /^backlog$/i, /^to do$/i, /^todo$/i, /^new$/i],
+  inProgress: [/^in progress$/i, /^doing$/i, /^active$/i, /^development$/i, /^wip$/i],
+  inReview: [/^in review$/i, /^review$/i, /^code review$/i, /^verification$/i],
+  done: [
+    /^done$/i,
+    /^closed$/i,
+    /^complete$/i,
+    /^completed$/i,
+    /^resolved$/i,
+    /^shipped$/i,
+  ],
 };
 
-/**
- * BFS reachability: check if `target` state is reachable from `from` state
- * by following the configured transition rules (direct or multi-hop).
- */
-function isReachable(from: string, target: string, rules: ProjectConfig['transitionRules']): boolean {
-  const visited = new Set<string>();
-  const queue = [from];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (current.toLowerCase() === target.toLowerCase()) return true;
-    if (visited.has(current)) continue;
-    visited.add(current);
-    for (const next of rules[current] ?? []) {
-      queue.push(next);
-    }
-  }
-  return false;
+const SIGNAL_CONCEPT: Record<Exclude<ActivitySignal, 'none'>, WorkflowConcept> = {
+  mr_merged: 'inReview',
+  mr_open: 'inProgress',
+};
+
+/** Infer one workflow concept only when exactly one configured state matches. */
+export function inferStateForConcept(
+  states: string[],
+  concept: WorkflowConcept,
+): string | null {
+  const matches = states.filter((state) => (
+    STATE_ALIASES[concept].some((alias) => alias.test(state))
+  ));
+  return matches.length === 1 ? matches[0] : null;
 }
 
-/**
- * Return the next valid state for an issue given a signal, or null if no
- * transition makes sense. Checks direct or transitive reachability.
- */
-function resolveNextState(
-  currentState: string,
-  signal: ActivitySignal,
-  config: ProjectConfig
+/** Resolve a semantic workflow concept to one configured state. */
+export function resolveStateForConcept(
+  config: ProjectConfig,
+  concept: WorkflowConcept,
 ): string | null {
-  const preferredTarget = SIGNAL_TARGET[signal];
-  if (!preferredTarget) return null;
+  const explicit = config.stateMapping?.[concept];
+  if (explicit) return explicit;
+  return inferStateForConcept(config.workflowStates, concept);
+}
 
-  // Check if the issue is already in the preferred target state
-  if (currentState.toLowerCase() === preferredTarget.toLowerCase()) return null;
+/** Derive the current workflow state from labels, then GitLab opened/closed as fallback. */
+export function deriveCurrentWorkflowState(
+  issue: Pick<IssueInput, 'labels' | 'state'>,
+  config: ProjectConfig,
+): string | null {
+  const labels = new Set(issue.labels.map((label) => label.toLowerCase()));
+  const labelledStates = config.workflowStates.filter((state) => labels.has(state.toLowerCase()));
+  if (labelledStates.length === 1) return labelledStates[0];
+  if (labelledStates.length > 1) return null;
 
-  // Find the canonical name for the preferred target in the configured states
-  const canonicalTarget = config.workflowStates.find(
-    (s) => s.toLowerCase() === preferredTarget.toLowerCase()
+  const direct = config.workflowStates.find(
+    (state) => state.toLowerCase() === issue.state.toLowerCase(),
   );
-
-  if (!canonicalTarget) return null;
-
-  // Allow the transition if the target is directly OR transitively reachable
-  const reachable = isReachable(currentState, canonicalTarget, config.transitionRules);
-  if (reachable) return canonicalTarget;
-
-  // Not reachable via rules — don't propose a transition
+  if (direct) return direct;
+  if (issue.state.toLowerCase() === 'opened') return resolveStateForConcept(config, 'open');
+  if (issue.state.toLowerCase() === 'closed') return resolveStateForConcept(config, 'done');
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Agent entry point
-// ---------------------------------------------------------------------------
+/** Return true only when the configured graph contains the exact edge. */
+export function isDirectTransition(
+  from: string,
+  target: string,
+  config: ProjectConfig,
+): boolean {
+  return (config.transitionRules[from] ?? []).some(
+    (candidate) => candidate.toLowerCase() === target.toLowerCase(),
+  );
+}
+
+/** Return true when timestamped MR activity is recent and newer than the issue. */
+function isFreshActivity(mr: MRInput, issue: IssueInput, now: Date): boolean {
+  const horizon = now.getTime() - MR_ACTIVITY_HORIZON_DAYS * 24 * 60 * 60 * 1000;
+  if (mr.updatedAt !== undefined) {
+    const updatedAt = Date.parse(mr.updatedAt);
+    if (!Number.isFinite(updatedAt) || updatedAt < horizon || updatedAt > now.getTime()) {
+      return false;
+    }
+  }
+  if (mr.state.toLowerCase() !== 'merged') return true;
+  if (mr.mergedAt === undefined || mr.mergedAt === null) {
+    return mr.updatedAt === undefined;
+  }
+  const mergedAt = Date.parse(mr.mergedAt);
+  if (!Number.isFinite(mergedAt) || mergedAt < horizon || mergedAt > now.getTime()) {
+    return false;
+  }
+  if (issue.updatedAt === undefined) return true;
+  const issueUpdatedAt = Date.parse(issue.updatedAt);
+  return Number.isFinite(issueUpdatedAt) && mergedAt >= issueUpdatedAt;
+}
+
+/** Derive the strongest fresh activity signal from linked merge requests. */
+function deriveSignal(issue: IssueInput, mrs: MRInput[], now: Date): ActivitySignal {
+  const fresh = mrs.filter((mr) => isFreshActivity(mr, issue, now));
+  if (fresh.some((mr) => mr.state.toLowerCase() === 'merged')) return 'mr_merged';
+  if (fresh.some((mr) => mr.state.toLowerCase() === 'opened')) return 'mr_open';
+  return 'none';
+}
 
 /**
- * Run the state-transition agent for a single issue.
- *
- * @param issue   The issue to evaluate.
- * @param mrs     All MRs linked or related to this issue (caller responsibility).
- * @param config  Project configuration with transition rules.
- * @returns       AgentFinding proposing a state transition, or null.
+ * Find the first edge on a path to the desired state. The returned transition
+ * is always direct even when the desired state is several workflow steps away.
  */
+function nextDirectState(
+  current: string,
+  desired: string,
+  config: ProjectConfig,
+): string | null {
+  const directTargets = config.transitionRules[current] ?? [];
+  const direct = directTargets.find(
+    (target) => target.toLowerCase() === desired.toLowerCase(),
+  );
+  if (direct) return direct;
+
+  const queue = directTargets.map((state) => ({ state, first: state }));
+  const visited = new Set<string>([current.toLowerCase()]);
+  while (queue.length > 0) {
+    const entry = queue.shift();
+    if (!entry) break;
+    const key = entry.state.toLowerCase();
+    if (visited.has(key)) continue;
+    visited.add(key);
+    if (key === desired.toLowerCase()) return entry.first;
+    for (const target of config.transitionRules[entry.state] ?? []) {
+      queue.push({ state: target, first: entry.first });
+    }
+  }
+  return null;
+}
+
+/** Run the state-transition agent for one issue. */
 export async function runStateTransitionAgent(
   issue: IssueInput,
   mrs: MRInput[],
-  config: ProjectConfig
+  config: ProjectConfig,
+  now = new Date(),
 ): Promise<AgentFinding | null> {
-  const signal = deriveSignal(mrs);
+  const signal = deriveSignal(issue, mrs, now);
   if (signal === 'none') return null;
 
-  const currentNorm = normaliseState(issue.state, config.workflowStates);
-  const nextState = resolveNextState(currentNorm, signal, config);
+  const current = deriveCurrentWorkflowState(issue, config);
+  if (!current) return null;
+  const desired = resolveStateForConcept(config, SIGNAL_CONCEPT[signal]);
+  if (!desired || current.toLowerCase() === desired.toLowerCase()) return null;
 
-  if (!nextState) return null;
-
-  const signalDesc =
-    signal === 'mr_merged'
-      ? 'a linked merge request was merged'
-      : 'a linked merge request is open and in progress';
+  const next = nextDirectState(current, desired, config);
+  if (!next || !isDirectTransition(current, next, config)) return null;
+  const signalDescription = signal === 'mr_merged'
+    ? 'a linked merge request was merged'
+    : 'a linked merge request is open';
 
   return {
     agent: 'ST',
     issueIid: issue.iid,
     action: 'state_transition',
-    suggestedValue: nextState,
+    suggestedValue: next,
     reason:
-      `Issue is currently "${currentNorm}" but ${signalDesc}. ` +
-      `Transitioning to "${nextState}" reflects the current activity and is ` +
-      `a valid move under the configured transition rules.`,
+      `Issue is currently "${current}" but ${signalDescription}. ` +
+      `"${next}" is the next direct configured transition toward "${desired}".`,
   };
 }

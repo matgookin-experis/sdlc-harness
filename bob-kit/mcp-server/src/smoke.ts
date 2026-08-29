@@ -23,18 +23,25 @@
  * Optional live GitLab checks are gated behind SDLC_SMOKE_LIVE=true.
  */
 
-import { GitLabClient, GitLabApiError } from "./gitlab-client.js";
-import { mergeEnvFile } from "./env.js";
+import {
+  GitLabClient,
+  GitLabApiError,
+  GitLabRequestTimeoutError,
+  MAX_GITLAB_ITEMS,
+  MAX_GITLAB_PAGES,
+} from "./gitlab-client.js";
 import { gitlabIssueReaderTool } from "./tools/gitlab-issue-reader.js";
 import { gitlabIssueWriterTool } from "./tools/gitlab-issue-writer.js";
 import { gitlabMrReaderWriterTool } from "./tools/gitlab-mr-reader-writer.js";
 import { workItemFormatTool } from "./tools/work-item-format.js";
+import { loadConfig, mergeEnvFile, resolveEnvFilePath } from './env.js';
+import type { Config } from './env.js';
 import type { ToolContext } from "./types.js";
 import { createServer } from "./server.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -424,15 +431,32 @@ async function testConfigLoading(): Promise<void> {
   const original = new Map(keys.map((key) => [key, process.env[key]]));
   const tempDir = mkdtempSync(join(tmpdir(), "sdlc-env-test-"));
   const envPath = join(tempDir, ".env");
-  const { loadConfig } = await import("./env.js");
+  const insecureEnvPath = join(tempDir, 'insecure.env');
+  const symlinkTargetPath = join(tempDir, 'symlink-target.env');
+  const symlinkEnvPath = join(tempDir, 'symlink.env');
 
   try {
+    delete process.env['SDLC_ENV_FILE'];
+    const canonicalEnvPath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      '..',
+      '.env',
+    );
+    assert(
+      resolveEnvFilePath() === canonicalEnvPath,
+      'Default credentials path is the repository-root .env',
+    );
+
     writeFileSync(
       envPath,
       "GITLAB_HOST=https://file.example.com/\n" +
         "GITLAB_PROJECT=file/project\n" +
         "GITLAB_TOKEN=file-token\n",
+      { mode: 0o600 },
     );
+    chmodSync(envPath, 0o600);
     for (const key of keys) delete process.env[key];
     process.env["SDLC_ENV_FILE"] = envPath;
 
@@ -440,12 +464,80 @@ async function testConfigLoading(): Promise<void> {
     assert(fileConfig.gitlabHost === "https://file.example.com", "Config loads from the selected env file");
     assert(fileConfig.gitlabProject === "file/project", "Env file project value is loaded");
 
+    delete process.env['GITLAB_HOST'];
+    delete process.env['GITLAB_PROJECT'];
+    delete process.env['GITLAB_TOKEN'];
+    const liveConfig = loadLiveConfig();
+    assert(
+      liveConfig.gitlabHost === 'https://file.example.com',
+      'Live smoke configuration loads the selected credentials file',
+    );
+
     process.env["GITLAB_HOST"] = "https://existing.example.com";
     process.env["GITLAB_PROJECT"] = "existing/project";
     process.env["GITLAB_TOKEN"] = "existing-token";
     const existingConfig = loadConfig();
     assert(existingConfig.gitlabHost === "https://existing.example.com", "Existing env values win over env file");
     assert(existingConfig.gitlabProject === "existing/project", "Existing project env value is preserved");
+
+    if (process.platform !== 'win32') {
+      writeFileSync(
+        symlinkTargetPath,
+        'GITLAB_HOST=https://symlink.example.com\n' +
+          'GITLAB_PROJECT=symlink/project\n' +
+          'GITLAB_TOKEN=symlink-file-token\n',
+        { mode: 0o600 },
+      );
+      chmodSync(symlinkTargetPath, 0o600);
+      symlinkSync(symlinkTargetPath, symlinkEnvPath);
+      delete process.env['GITLAB_HOST'];
+      delete process.env['GITLAB_PROJECT'];
+      delete process.env['GITLAB_TOKEN'];
+      process.env['SDLC_ENV_FILE'] = symlinkEnvPath;
+
+      let symlinkMessage = '';
+      try {
+        loadConfig();
+      } catch (error) {
+        symlinkMessage = error instanceof Error ? error.message : String(error);
+      }
+      assert(
+        symlinkMessage.includes('symbolic links are not allowed'),
+        'Credential-file symbolic links are rejected',
+      );
+      assert(
+        !symlinkMessage.includes('symlink-file-token'),
+        'Credentials-file symlink errors do not expose values',
+      );
+
+      writeFileSync(
+        insecureEnvPath,
+        'GITLAB_HOST=https://insecure.example.com\n' +
+          'GITLAB_PROJECT=insecure/project\n' +
+          'GITLAB_TOKEN=insecure-file-token\n',
+        { mode: 0o600 },
+      );
+      chmodSync(insecureEnvPath, 0o644);
+      delete process.env['GITLAB_HOST'];
+      delete process.env['GITLAB_PROJECT'];
+      delete process.env['GITLAB_TOKEN'];
+      process.env['SDLC_ENV_FILE'] = insecureEnvPath;
+
+      let insecureMessage = '';
+      try {
+        loadConfig();
+      } catch (error) {
+        insecureMessage = error instanceof Error ? error.message : String(error);
+      }
+      assert(
+        insecureMessage.includes('mode 644') && insecureMessage.includes('chmod 600'),
+        'Group/world-readable credentials files are rejected with remediation',
+      );
+      assert(
+        !insecureMessage.includes('insecure-file-token'),
+        'Credentials-file permission errors do not expose values',
+      );
+    }
 
     delete process.env["GITLAB_HOST"];
     delete process.env["GITLAB_PROJECT"];
@@ -460,6 +552,17 @@ async function testConfigLoading(): Promise<void> {
     }
     assert(caughtMsg.includes("Missing required"), "Missing variables produce a descriptive error");
     assert(!caughtMsg.includes("existing-token"), "Error message does not log credential values");
+
+    let liveError = '';
+    try {
+      loadLiveConfig();
+    } catch (error) {
+      liveError = error instanceof Error ? error.message : String(error);
+    }
+    assert(
+      liveError.includes('Live smoke requested') && liveError.includes('Missing required'),
+      'Live smoke fails clearly when requested credentials are absent',
+    );
   } finally {
     for (const key of keys) {
       const value = original.get(key);
@@ -480,12 +583,16 @@ async function testConfigLoading(): Promise<void> {
 async function testGitLabClientMock(): Promise<void> {
   section("GitLabClient (mock fetch)");
 
+  let mrListUrl = '';
   const ctx = buildMockContext((url) => {
     if (/\/issues\/1\/notes/.test(url)) return { status: 200, body: [] };
     if (/\/issues\/1$/.test(url)) return { status: 200, body: MOCK_ISSUE };
     if (/\/issues(\?|$)/.test(url)) return { status: 200, body: [MOCK_ISSUE] };
     if (/\/merge_requests\/10$/.test(url)) return { status: 200, body: MOCK_MR };
-    if (/\/merge_requests(\?|$)/.test(url)) return { status: 200, body: [MOCK_MR] };
+    if (/\/merge_requests(\?|$)/.test(url)) {
+      mrListUrl = url;
+      return { status: 200, body: [MOCK_MR] };
+    }
     if (/\/labels(\?|$)/.test(url)) return { status: 200, body: [] };
     if (/\/user$/.test(url)) return { status: 200, body: { username: "test-user" } };
     return { status: 404, body: { message: "Not found" } };
@@ -501,12 +608,266 @@ async function testGitLabClientMock(): Promise<void> {
   const mr = await ctx.gitlab.getMR(10);
   assert(mr.state === "merged", "getMR returns merged state");
 
+  const mrs = await ctx.gitlab.listMRs({ state: 'all' });
+  assert(mrs.length === 1, 'listMRs returns an array');
+  assert(
+    new URL(mrListUrl).searchParams.get('scope') === 'all',
+    'listMRs includes scope=all for project-wide results',
+  );
+
   const username = await ctx.gitlab.ping();
   assert(username === "test-user", "ping returns username");
 
   await assertThrows(
     () => ctx.gitlab.getIssue(999),
     "GitLabApiError thrown on 404"
+  );
+
+  let redirectMode: RequestInit['redirect'];
+  let redirectToken: string | null = null;
+  const redirectClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    async (_url, init): Promise<Response> => {
+      redirectMode = init?.redirect;
+      redirectToken = new Headers(init?.headers).get('PRIVATE-TOKEN');
+      return new Response(JSON.stringify({ username: 'test-user' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  );
+  await redirectClient.ping();
+  assert(
+    redirectMode === 'error',
+    'authenticated requests reject redirects before PRIVATE-TOKEN can be forwarded',
+  );
+  assert(
+    redirectToken === 'mock-token',
+    'authenticated requests retain the PRIVATE-TOKEN header',
+  );
+
+  const timeoutClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    (_url, init): Promise<Response> => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (!signal) {
+        reject(new Error('Missing request timeout signal.'));
+        return;
+      }
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }),
+    10,
+  );
+  let timeoutError: unknown;
+  try {
+    await timeoutClient.ping();
+  } catch (error) {
+    timeoutError = error;
+  }
+  assert(
+    timeoutError instanceof GitLabRequestTimeoutError,
+    'request deadline throws GitLabRequestTimeoutError',
+  );
+  assert(
+    timeoutError instanceof Error && timeoutError.message.includes('10ms'),
+    'request timeout error states the configured deadline',
+  );
+
+  const bodyTimeoutClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    async (_url, init): Promise<Response> => {
+      const signal = init?.signal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller): void {
+          controller.enqueue(new TextEncoder().encode('{"username":'));
+          signal?.addEventListener('abort', () => {
+            controller.error(new Error('Body read aborted.'));
+          }, { once: true });
+        },
+      });
+      return new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    10,
+  );
+  let bodyTimeoutError: unknown;
+  try {
+    await bodyTimeoutClient.ping();
+  } catch (error) {
+    bodyTimeoutError = error;
+  }
+  assert(
+    bodyTimeoutError instanceof GitLabRequestTimeoutError,
+    'request deadline remains active while the response body is consumed',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Test suite: GitLabClient pagination (mock fetch)
+// ---------------------------------------------------------------------------
+
+async function testGitLabClientPagination(): Promise<void> {
+  section('GitLabClient pagination (mock fetch)');
+
+  const firstLabels = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    name: `label-${index + 1}`,
+    color: '#000000',
+    description: null,
+  }));
+  const lastLabel = {
+    id: 101,
+    name: 'label-101',
+    color: '#000000',
+    description: null,
+  };
+  const firstNotes = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    body: `note-${index + 1}`,
+    author: { id: 1, username: 'dev', name: 'Dev User' },
+    created_at: '2024-01-01T00:00:00Z',
+    system: false,
+  }));
+  const lastNote = {
+    id: 101,
+    body: 'note-101',
+    author: { id: 1, username: 'dev', name: 'Dev User' },
+    created_at: '2024-01-01T00:00:00Z',
+    system: false,
+  };
+  const requestedUrls: string[] = [];
+  const ctx = buildMockContext((url) => {
+    requestedUrls.push(url);
+    const parsed = new URL(url);
+    const isFirstPage = parsed.searchParams.get('page') === '1';
+
+    if (parsed.pathname.endsWith('/labels')) {
+      return { status: 200, body: isFirstPage ? firstLabels : [lastLabel] };
+    }
+    if (parsed.pathname.endsWith('/issues/1/notes')) {
+      return { status: 200, body: isFirstPage ? firstNotes : [lastNote] };
+    }
+    if (parsed.pathname.endsWith('/merge_requests/10/notes')) {
+      return { status: 200, body: isFirstPage ? firstNotes : [lastNote] };
+    }
+    return { status: 404, body: { message: 'Not found' } };
+  });
+
+  const labels = await ctx.gitlab.listLabels();
+  const issueNotes = await ctx.gitlab.listIssueNotes(1);
+  const mrNotes = await ctx.gitlab.listMRNotes(10);
+  assert(labels.length === 101, 'listLabels returns results beyond the first 100');
+  assert(issueNotes.length === 101, 'listIssueNotes returns results beyond the first 100');
+  assert(mrNotes.length === 101, 'listMRNotes returns results beyond the first 100');
+
+  for (const suffix of ['/labels', '/issues/1/notes', '/merge_requests/10/notes']) {
+    const pages = requestedUrls
+      .filter((url) => new URL(url).pathname.endsWith(suffix))
+      .map((url) => new URL(url).searchParams.get('page'));
+    assert(pages.join(',') === '1,2', `${suffix} requests every result page`);
+  }
+
+  let pageLimitCalls = 0;
+  const pageLimitClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    async (): Promise<Response> => {
+      pageLimitCalls += 1;
+      return new Response(JSON.stringify(firstLabels), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+  );
+  let pageLimitError: unknown;
+  try {
+    await pageLimitClient.listLabels();
+  } catch (error) {
+    pageLimitError = error;
+  }
+  assert(
+    pageLimitError instanceof Error &&
+      pageLimitError.message.includes(`${MAX_GITLAB_PAGES} page limit`),
+    'pagination fails closed at the page limit',
+  );
+  assert(
+    pageLimitCalls === MAX_GITLAB_PAGES,
+    'pagination does not request a page beyond the page limit',
+  );
+
+  const oversizedPage = Array.from({ length: MAX_GITLAB_ITEMS + 1 }, (_, index) => ({
+    id: index + 1,
+    name: `oversized-label-${index + 1}`,
+    color: '#000000',
+    description: null,
+  }));
+  const itemLimitClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    makeMockFetch(() => ({ status: 200, body: oversizedPage })),
+  );
+  let itemLimitError: unknown;
+  try {
+    await itemLimitClient.listLabels();
+  } catch (error) {
+    itemLimitError = error;
+  }
+  assert(
+    itemLimitError instanceof Error &&
+      itemLimitError.message.includes(`${MAX_GITLAB_ITEMS} item limit`),
+    'pagination fails closed at the item limit',
+  );
+
+  const paginationTimeoutMs = 200;
+  let paginationCalls = 0;
+  const paginationTimeoutClient = new GitLabClient(
+    'https://gitlab.example.com',
+    'mock-token',
+    'demo/project',
+    async (_url, init): Promise<Response> => {
+      paginationCalls += 1;
+      if (paginationCalls === 1) {
+        await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 75));
+        return new Response(JSON.stringify(firstLabels), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) {
+          reject(new Error('Missing pagination timeout signal.'));
+          return;
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    },
+    paginationTimeoutMs,
+  );
+  let paginationTimeoutError: unknown;
+  try {
+    await paginationTimeoutClient.listLabels();
+  } catch (error) {
+    paginationTimeoutError = error;
+  }
+  assert(
+    paginationCalls === 2,
+    'pagination reaches the second page before the overall deadline',
+  );
+  assert(
+    paginationTimeoutError instanceof GitLabRequestTimeoutError &&
+      paginationTimeoutError.timeoutMs === paginationTimeoutMs,
+    'pagination reports the configured overall deadline for later pages',
   );
 }
 
@@ -639,12 +1000,16 @@ async function testGitLabIssueWriter(): Promise<void> {
 
   // add-label / remove-label: partial update
   let addRemoveBody: unknown;
+  let labelReadCount = 0;
   const addRemoveCtx = buildMockContext((url, init) => {
     if (url.includes("/issues/1") && init?.method === "PUT") {
       addRemoveBody = init.body ? JSON.parse(init.body as string) : null;
       return { status: 200, body: MOCK_ISSUE };
     }
-    if (url.includes("/issues/1")) return { status: 200, body: MOCK_ISSUE };
+    if (url.includes("/issues/1")) {
+      labelReadCount += 1;
+      return { status: 200, body: MOCK_ISSUE };
+    }
     return { status: 404, body: { message: "Not found" } };
   });
   await gitlabIssueWriterTool.execute({
@@ -654,9 +1019,25 @@ async function testGitLabIssueWriter(): Promise<void> {
     remove_labels: ["type::story"],
   }, addRemoveCtx);
   const arb = addRemoveBody as Record<string, unknown>;
-  const resultLabels = (arb["labels"] as string).split(",");
-  assert(!resultLabels.includes("type::story"), "remove_labels removes the specified label");
-  assert(resultLabels.includes("new-label"), "add_labels adds the specified label");
+  assert(arb['add_labels'] === 'new-label', 'add_labels uses GitLab native label addition');
+  assert(
+    arb['remove_labels'] === 'type::story',
+    'remove_labels uses GitLab native label removal',
+  );
+  assert(arb['labels'] === undefined, 'partial label updates do not replace all labels');
+  assert(labelReadCount === 0, 'partial label updates do not race through a read-modify-write');
+
+  const conflictingLabels = gitlabIssueWriterTool.argsSchema.safeParse({
+    action: 'update-issue',
+    iid: 1,
+    labels: ['replacement'],
+    add_labels: ['addition'],
+    remove_labels: ['removal'],
+  });
+  assert(
+    conflictingLabels.success === false,
+    'update-issue rejects labels replacement combined with add/remove operations',
+  );
 
   // close-issue
   let closeBody: unknown;
@@ -898,9 +1279,9 @@ async function testMcpTransportIntegration(): Promise<void> {
         arguments: { action: "summary" },
       });
       const reviewText = (reviewResult.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
-      const reviewParsed = JSON.parse(reviewText) as { total?: number; approvalRate?: number };
+      const reviewParsed = JSON.parse(reviewText) as { total?: number; acceptanceRate?: number };
       assert(
-        reviewParsed.total === 0 && reviewParsed.approvalRate === 0,
+        reviewParsed.total === 0 && reviewParsed.acceptanceRate === 0,
         "sdlc-review-decision loads the skill runtime and returns telemetry summary"
       );
     } finally {
@@ -979,6 +1360,7 @@ async function testMcpTransportIntegration(): Promise<void> {
 async function testMcpStdioIntegration(): Promise<void> {
   section("MCP stdio integration (compiled subprocess)");
   const serverPath = resolve(dirname(fileURLToPath(import.meta.url)), "index.js");
+  const tempDir = mkdtempSync(join(tmpdir(), 'sdlc-mcp-stdio-'));
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [serverPath],
@@ -987,6 +1369,7 @@ async function testMcpStdioIntegration(): Promise<void> {
       GITLAB_HOST: "https://gitlab.example.com",
       GITLAB_PROJECT: "demo/project",
       GITLAB_TOKEN: "smoke-test-token",
+      SDLC_ENV_FILE: join(tempDir, '.env.missing'),
     },
     stderr: "pipe",
   });
@@ -1005,6 +1388,7 @@ async function testMcpStdioIntegration(): Promise<void> {
     assert(parsed.template?.type === "Task", "compiled stdio server executes a tool call");
   } finally {
     await client.close();
+    rmSync(tempDir, { recursive: true, force: true });
   }
 }
 
@@ -1012,20 +1396,29 @@ async function testMcpStdioIntegration(): Promise<void> {
 // Live smoke test (optional — requires real GitLab credentials)
 // ---------------------------------------------------------------------------
 
+/**
+ * Load credentials for a requested live smoke run and add actionable context to errors.
+ * @returns Validated GitLab configuration.
+ */
+function loadLiveConfig(): Config {
+  try {
+    return loadConfig();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Live smoke requested but credentials could not be loaded: ${message}`);
+  }
+}
+
 async function testLive(): Promise<void> {
   section("Live GitLab smoke test");
 
-  const host = process.env["GITLAB_HOST"];
-  const project = process.env["GITLAB_PROJECT"];
-  const token = process.env["GITLAB_TOKEN"];
-
-  if (!host || !project || !token) {
-    process.stdout.write("  ⚠ Skipped — set GITLAB_HOST, GITLAB_PROJECT, GITLAB_TOKEN to run live tests.\n");
-    return;
-  }
-
-  const client = new GitLabClient(host, token, project);
   try {
+    const config = loadLiveConfig();
+    const client = new GitLabClient(
+      config.gitlabHost,
+      config.gitlabToken,
+      config.gitlabProject,
+    );
     const username = await client.ping();
     assert(typeof username === "string" && username.length > 0, `Authenticated as ${username}`);
 
@@ -1049,12 +1442,11 @@ async function testLive(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  // Best-effort merge of bob-kit/mcp-server/.env into process.env so
+  // Best-effort merge of the repository-root .env into process.env so
   // SDLC_SMOKE_LIVE and the GitLab credentials can come from .env alone —
-  // matches what the onboarding runbook already tells users to expect.
-  // Never overrides values already set in the shell. Missing/absent values
-  // are fine here; testLive() below already prints a friendly skip message
-  // when GitLab credentials aren't present.
+  // matches the installed MCP configuration. Never overrides values already
+  // set in the shell; testLive() reports an actionable error when requested
+  // credentials are absent.
   mergeEnvFile();
 
   process.stdout.write("sdlc-harness MCP server — smoke test\n");
@@ -1063,6 +1455,7 @@ async function main(): Promise<void> {
   await testWorkItemFormat();
   await testConfigLoading();
   await testGitLabClientMock();
+  await testGitLabClientPagination();
   await testGitLabIssueReader();
   await testGitLabIssueWriter();
   await testGitLabMrReaderWriter();
