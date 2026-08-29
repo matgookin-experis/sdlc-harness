@@ -259,13 +259,19 @@ labels = [label for label in json.load(sys.stdin) if label["name"] == os.environ
 print("yes" if labels else "")
 ' 2>/dev/null)
   if [ -z "$exists" ]; then
+    # Payload goes to a temp file rather than straight into curl's stdin — piping
+    # a native-Windows python3's stdout into curl (`--data-binary @-`) is
+    # unreliable under Git Bash on Windows (MSYS-emulated pipe vs. native CRT
+    # stdio flush; see seed.sh's TMP_DIR comment for the full explanation).
+    local payload_file="$TMP_DIR/ensure-label.json"
     NAME="$name" COLOR="$color" python3 -c '
 import json
 import os
 import sys
 
 json.dump({"name": os.environ["NAME"], "color": os.environ["COLOR"]}, sys.stdout)
-' | api POST "projects/$PROJECT_ID/labels" --data-binary @- > /dev/null
+' > "$payload_file"
+    api POST "projects/$PROJECT_ID/labels" --data-binary @"$payload_file" > /dev/null
     echo "  Created label: $name"
   else
     echo "  Label already exists: $name"
@@ -351,8 +357,8 @@ print(json.dumps(payload, separators=(",", ":")))
   fi
 
   local iid
-  iid=$(
-    TITLE="$title" DESCRIPTION="$description" LABELS="$labels" python3 -c '
+  local payload_file="$TMP_DIR/create-issue.json"
+  TITLE="$title" DESCRIPTION="$description" LABELS="$labels" python3 -c '
 import json
 import os
 import sys
@@ -362,9 +368,9 @@ json.dump({
     "description": os.environ["DESCRIPTION"],
     "labels": os.environ["LABELS"],
 }, sys.stdout)
-' | api POST "projects/$PROJECT_ID/issues" --data-binary @- \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['iid'])"
-  )
+' > "$payload_file"
+  iid=$(api POST "projects/$PROJECT_ID/issues" --data-binary @"$payload_file" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['iid'])")
 
   if [ "$state" = "closed" ]; then
     api PUT "projects/$PROJECT_ID/issues/$iid" -d '{"state_event":"close"}' > /dev/null
@@ -550,6 +556,7 @@ if [ -z "$BRANCH_EXISTS" ]; then
   DEFAULT_SHA=$(api GET "projects/$PROJECT_ID/repository/branches/main" \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['commit']['id'])")
 
+  BRANCH_PAYLOAD="$TMP_DIR/create-branch.json"
   BRANCH_NAME="$BRANCH_NAME" DEFAULT_SHA="$DEFAULT_SHA" python3 -c '
 import json
 import os
@@ -559,7 +566,8 @@ json.dump({
     "branch": os.environ["BRANCH_NAME"],
     "ref": os.environ["DEFAULT_SHA"],
 }, sys.stdout)
-' | api POST "projects/$PROJECT_ID/repository/branches" --data-binary @- > /dev/null
+' > "$BRANCH_PAYLOAD"
+  api POST "projects/$PROJECT_ID/repository/branches" --data-binary @"$BRANCH_PAYLOAD" > /dev/null
   echo "  Created branch: $BRANCH_NAME"
 fi
 
@@ -616,6 +624,7 @@ create_fixture_commit() {
   encoded_fixture_path=$(FILE_PATH="$fixture_path" python3 -c \
     "import os, urllib.parse; print(urllib.parse.quote(os.environ['FILE_PATH'], safe=''))")
 
+  local payload_file="$TMP_DIR/fixture-commit.json"
   BRANCH_NAME="$BRANCH_NAME" DEFAULT_SHA="$default_sha" \
     ISSUE5_IID="$ISSUE5_IID" ISSUE9_IID="$ISSUE9_IID" python3 -c '
 import json
@@ -640,8 +649,9 @@ json.dump({
     "content": content,
     "commit_message": "Add staging deployment fixture",
 }, sys.stdout)
-' | api POST "projects/$PROJECT_ID/repository/files/$encoded_fixture_path" \
-    --data-binary @- > /dev/null
+' > "$payload_file"
+  api POST "projects/$PROJECT_ID/repository/files/$encoded_fixture_path" \
+    --data-binary @"$payload_file" > /dev/null
   echo "  Created fixture commit at $fixture_path"
 }
 
@@ -672,8 +682,8 @@ else
     exit 1
   fi
 
-  MR_IID=$(
-    BRANCH_NAME="$BRANCH_NAME" python3 -c '
+  MR_PAYLOAD="$TMP_DIR/create-mr.json"
+  BRANCH_NAME="$BRANCH_NAME" python3 -c '
 import json
 import os
 import sys
@@ -683,9 +693,9 @@ json.dump({
     "target_branch": "main",
     "title": "Staging deployment fixture",
 }, sys.stdout)
-' | api POST "projects/$PROJECT_ID/merge_requests" --data-binary @- \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['iid'])"
-  )
+' > "$MR_PAYLOAD"
+  MR_IID=$(api POST "projects/$PROJECT_ID/merge_requests" --data-binary @"$MR_PAYLOAD" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['iid'])")
   echo "  Created MR !$MR_IID"
 fi
 
@@ -694,6 +704,7 @@ MR_DESCRIPTION="Adds the GitLab CI configuration for the staging deployment pipe
 
 Related to #${ISSUE5_IID}
 Related to #${ISSUE9_IID}"
+MR_UPDATE_PAYLOAD="$TMP_DIR/update-mr.json"
 MR_TITLE="$MR_TITLE" MR_DESCRIPTION="$MR_DESCRIPTION" python3 -c '
 import json
 import os
@@ -703,7 +714,8 @@ json.dump({
     "title": os.environ["MR_TITLE"],
     "description": os.environ["MR_DESCRIPTION"],
 }, sys.stdout)
-' | api PUT "projects/$PROJECT_ID/merge_requests/$MR_IID" --data-binary @- > /dev/null
+' > "$MR_UPDATE_PAYLOAD"
+api PUT "projects/$PROJECT_ID/merge_requests/$MR_IID" --data-binary @"$MR_UPDATE_PAYLOAD" > /dev/null
 
 MR_STATE=$(api GET "projects/$PROJECT_ID/merge_requests/$MR_IID" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['state'])")
@@ -744,6 +756,7 @@ print(status)
 
   BRANCH_SHA=$(api GET "projects/$PROJECT_ID/repository/branches/$ENCODED_BRANCH" \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['commit']['id'])")
+  MERGE_PAYLOAD="$TMP_DIR/merge-mr.json"
   BRANCH_SHA="$BRANCH_SHA" python3 -c '
 import json
 import os
@@ -753,8 +766,9 @@ json.dump({
     "sha": os.environ["BRANCH_SHA"],
     "should_remove_source_branch": False,
 }, sys.stdout)
-' | api PUT "projects/$PROJECT_ID/merge_requests/$MR_IID/merge" \
-    --data-binary @- > /dev/null
+' > "$MERGE_PAYLOAD"
+  api PUT "projects/$PROJECT_ID/merge_requests/$MR_IID/merge" \
+    --data-binary @"$MERGE_PAYLOAD" > /dev/null
 fi
 
 MR_STATE=$(api GET "projects/$PROJECT_ID/merge_requests/$MR_IID" \

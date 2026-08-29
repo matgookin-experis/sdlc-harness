@@ -47,6 +47,18 @@ DEMO_PASSWORD="$GITLAB_DEMO_PASSWORD"
 
 # Use a temp dir relative to SCRIPT_DIR so its path resolves to a real Windows
 # filesystem path (not /tmp) — docker cp requires a path that Windows can resolve.
+#
+# It is also used to stage JSON request bodies for `api POST/PUT` calls.
+# Every such body is written by python3 to a file here first and then read by
+# curl via `--data-binary @file` — NEVER piped directly (`python3 ... | api
+# POST ... --data-binary @-`). On Windows/Git Bash, piping a native python3.exe's
+# stdout straight into curl.exe's stdin is unreliable: MSYS emulates Unix pipes
+# with Win32 named pipes, and that emulation layer's flush/close semantics don't
+# line up cleanly with two independent native (non-MSYS) processes on either
+# end. In practice curl receives an empty body (the request may not even reach
+# the server) while python3 fails its final stdout flush with `OSError: [Errno
+# 22] Invalid argument`. Writing to a file first (same trick already used below
+# for CURL_CONFIG) sidesteps the pipe entirely.
 TMP_DIR="$SCRIPT_DIR/.seed-tmp"
 umask 077
 rm -rf "$TMP_DIR"
@@ -279,8 +291,8 @@ u = json.load(sys.stdin)
 print(u[0]['id'] if u else '')
 " 2>/dev/null)
 if [ -z "$USER_ID" ]; then
-  USER_ID=$(
-    DEMO_PASSWORD="$DEMO_PASSWORD" python3 -c '
+  USER_PAYLOAD="$TMP_DIR/create-user.json"
+  DEMO_PASSWORD="$DEMO_PASSWORD" python3 -c '
 import json
 import os
 import sys
@@ -292,9 +304,9 @@ json.dump({
     "password": os.environ["DEMO_PASSWORD"],
     "skip_confirmation": True,
 }, sys.stdout)
-' | api POST "users" --data-binary @- \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])"
-  )
+' > "$USER_PAYLOAD"
+  USER_ID=$(api POST "users" --data-binary @"$USER_PAYLOAD" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   echo "  Created user 'demo' (id=$USER_ID)"
 else
   echo "  User 'demo' already exists (id=$USER_ID)"
@@ -359,13 +371,15 @@ api PUT "users/$USER_ID" --data '{"external":false,"admin":false}' > /dev/null
 MEMBER_LEVEL=$(api GET "groups/$GROUP_ID/members/$USER_ID" 2>/dev/null \
   | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_level',''))" 2>/dev/null || true)
 if [ -z "$MEMBER_LEVEL" ]; then
+  MEMBER_PAYLOAD="$TMP_DIR/add-member.json"
   USER_ID="$USER_ID" python3 -c '
 import json
 import os
 import sys
 
 json.dump({"user_id": int(os.environ["USER_ID"]), "access_level": 30}, sys.stdout)
-' | api POST "groups/$GROUP_ID/members" --data-binary @- > /dev/null
+' > "$MEMBER_PAYLOAD"
+  api POST "groups/$GROUP_ID/members" --data-binary @"$MEMBER_PAYLOAD" > /dev/null
   echo "  Added 'demo' to group as Developer"
 elif [ "$MEMBER_LEVEL" != "30" ]; then
   api PUT "groups/$GROUP_ID/members/$USER_ID" \
@@ -384,8 +398,8 @@ p = [x for x in json.load(sys.stdin) if x['path'] == 'weather-dashboard']
 print(p[0]['id'] if p else '')
 " 2>/dev/null)
 if [ -z "$PROJECT_ID" ]; then
-  PROJECT_ID=$(
-    GROUP_ID="$GROUP_ID" python3 -c '
+  PROJECT_PAYLOAD="$TMP_DIR/create-project.json"
+  GROUP_ID="$GROUP_ID" python3 -c '
 import json
 import os
 import sys
@@ -398,9 +412,9 @@ json.dump({
     "initialize_with_readme": False,
     "description": "SDLC Harness demo app - a deterministic mock weather dashboard",
 }, sys.stdout)
-' | api POST "projects" --data-binary @- \
-      | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])"
-  )
+' > "$PROJECT_PAYLOAD"
+  PROJECT_ID=$(api POST "projects" --data-binary @"$PROJECT_PAYLOAD" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
   echo "  Created project 'weather-dashboard' (id=$PROJECT_ID)"
 else
   echo "  Project 'weather-dashboard' already exists (id=$PROJECT_ID)"
@@ -427,6 +441,7 @@ add_file() {
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('file_name',''))" 2>/dev/null || true)
 
   if [ -z "$exists" ]; then
+    local payload_file="$TMP_DIR/add-file.json"
     COMMIT_MSG="$commit_msg" python3 -c '
 import base64
 import json
@@ -440,9 +455,9 @@ json.dump({
     "commit_message": os.environ["COMMIT_MSG"],
     "encoding": "base64",
 }, sys.stdout)
-' < "$src_file" | api POST \
-      "projects/$PROJECT_ID/repository/files/${encoded_path}" \
-      --data-binary @- > /dev/null
+' < "$src_file" > "$payload_file"
+    api POST "projects/$PROJECT_ID/repository/files/${encoded_path}" \
+      --data-binary @"$payload_file" > /dev/null
     echo "  Added $file_path"
   else
     echo "  $file_path already exists, skipping"
