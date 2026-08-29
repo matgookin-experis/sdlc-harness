@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agents and Tools — sdlc-harness</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="page">
+    <a class="brand" href="index.html">sdlc-harness docs</a>
+    <a href="problem-statement.html">Problem Statement</a>
+    <a href="agents-and-tools.html">Agents &amp; Tools</a>
+    <a href="bob-usage.html">Bob Usage</a>
+    <a href="security.html">Security</a>
+    <a href="onboarding/runbook.html">Onboarding</a>
+    <a href="demo/narrative.html">Demo</a>
+  </div>
+</nav>
+<main class="page">
+  <h1>Agents and Tools</h1>
+  <p>What is inside the sdlc-harness skill: five agents that inspect work items,
+  and five MCP tools they use to reach GitLab. This page is the reference for
+  both the documentation set and the presentation.</p>
+
+  <div id="toc"></div>
+
+  <h2>The rule that shapes everything</h2>
+  <p><strong>The agents detect. They never write.</strong> An agent inspects one
+  issue, decides whether something is wrong, and returns a finding. It has no
+  path to GitLab of its own. Every change reaches an issue through the review
+  interface, and only after a person approves it.</p>
+
+  <p>This is enforced in code, not by convention. Each agent is a pure function:
+  it takes an issue, returns a finding or <code>null</code>, and performs no
+  network calls. The write path lives in <code>review.ts</code>, and
+  <code>applyFinding()</code> throws if it is handed a finding whose text has not
+  been drafted yet. Placeholder text cannot reach a real issue.</p>
+
+  <p>The second rule matters as much: <strong>where the issue does not say
+  something, the agent asks rather than invents</strong>. Every finding carries an
+  <code>unknowns</code> list, which is the set of gaps the issue does not fill.
+  Those become direct questions to the author. A confident, plausible, made up
+  value is worse than no value at all, because it looks finished.</p>
+
+  <h2>The five agents</h2>
+
+  <h3>Acceptance criteria (AC)</h3>
+  <p>Finds issues with no acceptance criteria and drafts them in Given-When-Then
+  form, grounded in the issue's own title and description.</p>
+  <p>Detection is deterministic. An issue is treated as already having criteria
+  if the description contains an <code>Acceptance Criteria</code> heading,
+  <code>## AC</code>, <code>## Criteria</code>, or a structured Given / When /
+  Then block where each clause opens its own line. Three keywords inside a
+  sentence of ordinary prose does not count, which is why a line like "Given the
+  deadline is tight, when we ship this, then keep scope small" is correctly
+  ignored.</p>
+  <p>The agent fetches the format from the <code>work-item-format</code> tool
+  rather than holding a second copy of the standard, so a Bug gets Bug structure
+  and a User Story gets story structure.</p>
+
+  <h3>Ambiguity (AM)</h3>
+  <p>Finds wording that cannot be tested against, and proposes a rewrite that
+  keeps the author's meaning.</p>
+  <p>It flags five categories: placeholders (<code>TBD</code>,
+  <code>TODO</code>, <code>FIXME</code>, <code>XXX</code>), non specific pronouns
+  ("the thing", "something", "somehow"), vague subjects ("fix it", "it doesn't
+  work"), non testable claims ("does not work"), and vague quantities ("various",
+  "several things"). The finding names the exact phrases, so the rewrite replaces
+  those spans and leaves the rest of the description alone.</p>
+  <p>To avoid false positives, a description of at least 80 characters carrying
+  two or more specificity signals (file paths, inline code, URLs, API or endpoint
+  or class references) is left alone even if one loose word appears.</p>
+
+  <h3>Dependency (DEP)</h3>
+  <p>Finds issues that describe the same work and proposes a link between
+  them.</p>
+  <p>Overlap is measured with Jaccard similarity over keyword tokens, with stop
+  words removed. Pairs scoring below 0.12 are ignored; above 0.25 the confidence
+  is raised. The agent proposes <code>blocks</code> when one issue contains
+  dependency language, and <code>relates-to</code> when it does not. It never
+  produces self links or duplicate pairs.</p>
+  <p>These links are written for real. <code>createIssueLink()</code> in
+  <code>gitlab-client.ts</code> calls GitLab's issue links API, so an approved
+  dependency finding creates an actual relationship in the project.</p>
+
+  <h3>State transition (ST)</h3>
+  <p>Finds issues whose state is stale compared to merge request activity.</p>
+  <p>A merged merge request against an open issue proposes <code>In Review</code>.
+  An open merge request proposes <code>In Progress</code>. With no linked merge
+  request there is no signal and no finding.</p>
+  <p>The agent only proposes transitions that the team's own rules allow. Valid
+  states and transitions come from <code>.sdlc-harness.json</code>, written once
+  during onboarding, and reachability is checked across those rules before
+  anything is suggested. GitLab issues only have <code>opened</code> and
+  <code>closed</code>, so workflow states are carried as scoped labels.</p>
+
+  <h3>Test coverage (COV)</h3>
+  <p>Cross references issues against test files and flags work items with no test
+  reference. It looks for <code>#12</code>, <code>closes #12</code>,
+  <code>fixes #12</code> and similar patterns.</p>
+  <p>This one is off by default and has to be enabled in the project config. It
+  is a P1 stretch item, held back deliberately until the four P0 agents were
+  proven.</p>
+
+  <h2>The five MCP tools</h2>
+  <table>
+    <thead><tr><th>Tool</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>gitlab-issue-reader</code></td><td>Reads issues, labels and comments for the configured project. Every agent starts here.</td></tr>
+      <tr><td><code>gitlab-issue-writer</code></td><td>Creates and updates issues, with duplicate detection on title. Only the review interface calls it.</td></tr>
+      <tr><td><code>gitlab-mr-reader-writer</code></td><td>Reads and manages merge requests. This is what gives the state transition agent its activity signal.</td></tr>
+      <tr><td><code>work-item-format</code></td><td>The canonical format standard: title conventions, description structure and Given-When-Then criteria per work item type. Single source of truth, so the agents do not each invent their own.</td></tr>
+      <tr><td><code>sdlc-review-decision</code></td><td>Applies or rejects a suggestion and records telemetry in one atomic step, so a decision cannot be written without being logged.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Scope</h2>
+  <p>The skill acts only on the project established during onboarding. It never
+  reads or writes issues, merge requests or labels in any other group or project
+  on the same GitLab instance, including while scanning for dependency overlap.
+  To govern a different project, onboarding is re run. Scope is never inferred or
+  widened on its own.</p>
+
+  <h2>Telemetry and the acceptance rate</h2>
+  <p>Every decision appends one line to an append only JSONL log: which agent,
+  which issue, which action, and the outcome. Outcomes are
+  <code>accepted</code>, <code>edited</code>, <code>rejected</code> and
+  <code>failed</code>.</p>
+  <p><code>failed</code> exists for a specific reason. If a write does not reach
+  GitLab, the decision is recorded as failed and excluded from both sides of the
+  acceptance rate fraction. Without it, the rate would count writes that never
+  happened, and the number the demo cites would mean nothing.</p>
+  <p>That number is the point of the whole system. It is not "here is a feature",
+  it is "here is evidence the team is accepting most of what it sees". A rate
+  that climbs means the agents are learning the team's conventions. A rate that
+  stalls means they are adding noise.</p>
+
+  <h2>Where the code lives</h2>
+  <table>
+    <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+    <tbody>
+      <tr><td><code>bob-kit/skills/sdlc-harness/src/agents/</code></td><td>The five agents, one file each</td></tr>
+      <tr><td><code>bob-kit/skills/sdlc-harness/src/skill/review.ts</code></td><td>The review interface and the only write path</td></tr>
+      <tr><td><code>bob-kit/skills/sdlc-harness/src/skill/telemetry.ts</code></td><td>The decision log and acceptance rate</td></tr>
+      <tr><td><code>bob-kit/skills/sdlc-harness/src/skill/onboard.ts</code></td><td>Onboarding, writes <code>.sdlc-harness.json</code></td></tr>
+      <tr><td><code>bob-kit/mcp-server/src/tools/</code></td><td>The five MCP tools</td></tr>
+      <tr><td><code>bob-kit/skills/sdlc-harness/SKILL.md</code></td><td>The runtime instructions the skill follows</td></tr>
+    </tbody>
+  </table>
+</main>
+<script src="assets/nav.js"></script>
+</body>
+</html>
