@@ -50,7 +50,6 @@ Ask the user:
 2. What work item types does the team use? (e.g. Story, Bug, Task, Epic)
 3. What are the workflow states? (e.g. Open, In Progress, In Review, Done)
 4. What are the valid state transitions? (e.g. Open → In Progress, In Progress → In Review)
-5. Are there existing work item templates to follow?
 
 Save answers to `.sdlc-harness.json` in the repo root using the `ProjectConfig` schema
 defined in `bob-kit/skills/sdlc-harness/src/models.ts`.
@@ -58,17 +57,6 @@ defined in `bob-kit/skills/sdlc-harness/src/models.ts`.
 ---
 
 ## Phase 2 — Work Item Templates (Task 19)
-
-<!-- TODO Task 19: Industry best-practice templates for:
-     - User Story  (title convention, description structure, Given-When-Then AC)
-     - Bug         (steps to reproduce, expected vs actual, severity)
-     - Task        (definition of done, effort estimate placeholder)
-     - Epic        (goal, child story links, success metrics)
-     DELEGATE, DO NOT DUPLICATE: the canonical standard lives in the
-     `work-item-format` MCP tool (Task 13). This phase should call
-     that tool for title/description/AC structure rather than re-defining the
-     standard inline here.
--->
 
 The standard lives in the `work-item-format` MCP tool, not here. Tasks 20 and 21 call
 `get-template` at drafting time (see Phase 3), so the template is fetched per work-item
