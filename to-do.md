@@ -51,8 +51,8 @@ Reused engineering scaffolding only — not the adjacent generic coding-assistan
 ## 2B. sdlc-harness Skill & Agents (the actual product)
 
 done - 17. **Skill scaffold** `[P0]` — create the `SKILL.md` file for the `sdlc-harness` Bob skill with correct frontmatter (name, description, triggers) following the Bob skill authoring conventions.
-mat in progress - 18. **Onboarding conversation flow** `[P0]` — define the guided conversation steps that collect project management tool type (GitLab Issues for the demo), project URL, work item types, workflow states, **and transition rules**; document the expected input/output for each step.
-mat in progress - 19. **Work item template baseline** `[P0]` — author industry best-practice templates (User Story, Bug, Task, Epic) as structured prompts the skill applies when creating or reviewing work items.
+done - 18. **Onboarding conversation flow** `[P0]` — define the guided conversation steps that collect project management tool type (GitLab Issues for the demo), project URL, work item types, workflow states, **and transition rules**; document the expected input/output for each step.
+done - 19. **Work item template baseline** `[P0]` — author industry best-practice templates (User Story, Bug, Task, Epic) as structured prompts the skill applies when creating or reviewing work items.
 20. **Acceptance criteria agent** `[P0]` — detects issues lacking acceptance criteria and drafts them using the work item description and template as context.
 21. **Ambiguity detection agent** `[P0]` — flags descriptions with vague language and proposes concrete rewrites.
 22. **Dependency suggestion agent** `[P0]` — scans open issues for semantic overlap and proposes `relates-to` / `blocks` links.
