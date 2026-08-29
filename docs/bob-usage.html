@@ -82,12 +82,42 @@
   entry, agent orchestration design, skill unit tests) dispatched to Bob as one batch, at
   1.2M tokens sent and an API cost of 2.41 for that session alone.</p>
 
+  <p>Tasks 20 through 26 &mdash; the five agents, the human review interface and the
+  suggestion telemetry &mdash; were built in a single tracked session
+  (<a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a>),
+  16 of 16 sub-tasks completed at a cost of 9.03 Bobcoins. The session summary maps each
+  agent to its task number and source file, which is why the repo's module layout matches
+  <code>to-do.md</code> one-for-one rather than approximately.</p>
+
   <p>The agent design iterated rather than landing correctly on the first pass: a later
   commit (<code>f0032a3 Tasks 20-21: agents produce a draft brief instead of templated
   prose</code>) reworked the AC and Ambiguity agents specifically because their first
   version produced generic filler text ("the system responds correctly") instead of
   grounding output in the actual issue content, a change made after reviewing what the
   agents had actually produced.</p>
+
+  <p>That review round
+  (<a href="../bob-sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a>,
+  22.34 Bobcoins &mdash; the most expensive session in the project) was where Bob was used
+  as a reviewer rather than a generator, and it found defects that the passing test suite
+  did not. The most serious: <code>applyFinding</code> recorded a telemetry outcome of
+  <code>accepted</code> for writes that never reached GitLab, so the acceptance-rate
+  number the demo cites would have been computed from writes that never happened. Bob
+  added a <code>failed</code> outcome excluded from both sides of the fraction. The same
+  round fixed an acceptance-criteria detector that treated ordinary prose containing
+  "given&hellip;when&hellip;then" as real criteria, and a verb-conjugation bug that
+  rendered "When the user add dark mode toggle". Sixty of sixty tests passed both before
+  and after, which is the point: the suite was checking that the plumbing ran, not that
+  the output was correct.</p>
+
+  <p>The finished loop was then verified against a running GitLab instance rather than
+  against mocks
+  (<a href="../bob-sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a>,
+  12 of 12 at 6.42 Bobcoins). Bob drove the agents through the MCP tools only &mdash; no
+  shell, no <code>curl</code>, no <code>git</code> &mdash; applied suggestions to real
+  seeded issues, then re-read those issues back from GitLab to confirm the writes had
+  actually landed. The same session reported what did <em>not</em> work alongside what
+  did, including a port collision that stopped the demo site container from starting.</p>
 
   <h2>The weather app</h2>
   <p>The Weather Dashboard demo artifact (<code>weather-app/</code>) was built by a
@@ -126,6 +156,10 @@
       <tr><td><a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>
       <tr><td><a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png.png"><code>Prasanna-weather-dashboard-session-summary.png.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a></td><td>Tasks 20-26 built &mdash; five agents, review interface, telemetry (16/16, 9.03 Bobcoins)</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a></td><td>Bob reviewing its own output: telemetry, detector and grammar defects fixed, then merged to <code>dev</code> (3/3, 22.34 Bobcoins)</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a></td><td>End-to-end verification against a live GitLab through MCP tools only (12/12, 6.42 Bobcoins)</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_bob_budget_used.png"><code>teamexperis_bob_budget_used.png</code></a></td><td>Bob budget consumed across the build: 40.02 of 40.00 Bobcoins</td></tr>
     </tbody>
   </table>
 </main>
