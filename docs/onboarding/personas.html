@@ -129,7 +129,7 @@
 
   <h3>What they demo</h3>
   <ul>
-    <li>Switch to <code>root</code> credentials in <code>bob-kit/mcp-server/.env</code>
+    <li>Switch to <code>root</code> credentials in the repo-root <code>.env</code>
     (swap <code>GITLAB_TOKEN</code> for a <code>root</code> PAT) and confirm the same
     skill works without reconfiguration.</li>
     <li>Trigger a <strong>bulk Transition audit</strong> and apply state moves to
@@ -147,12 +147,13 @@
     <li>Go to <strong>User → Edit profile → Access Tokens</strong>.</li>
     <li>Create a token named <code>sdlc-harness-mcp-demo</code> with <code>api</code>
     scope.</li>
-    <li>Copy the token into <code>bob-kit/mcp-server/.env</code> as
-    <code>GITLAB_TOKEN</code>.</li>
+    <li>Copy the token into the repo-root <code>.env</code> as
+    <code>GITLAB_TOKEN</code> (not <code>bob-kit/mcp-server/.env</code> — that's a
+    different file Bob's spawned MCP server never reads).</li>
     <li>Restart the MCP server (or restart Bob) to pick up the new token.</li>
-    <li>Run the live smoke test:
+    <li>Run the live smoke test against that same file:
       <pre><code>cd bob-kit/mcp-server
-SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smoke</code></pre>
     </li>
   </ol>
   <p>For the <strong>Project Lead persona</strong> demo, repeat the same steps while
@@ -163,7 +164,7 @@ SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
   <h2>Switching personas during the demo</h2>
   <p>To switch between personas mid-demo without re-running onboarding:</p>
   <ol>
-    <li>Update <code>GITLAB_TOKEN</code> in <code>bob-kit/mcp-server/.env</code>.</li>
+    <li>Update <code>GITLAB_TOKEN</code> in the repo-root <code>.env</code>.</li>
     <li>Restart Bob (the MCP server process is restarted automatically).</li>
     <li>The <code>.sdlc-harness.json</code> config is shared, no re-onboarding needed.</li>
     <li>Run one quick <code>audit</code> call to confirm the new token works before

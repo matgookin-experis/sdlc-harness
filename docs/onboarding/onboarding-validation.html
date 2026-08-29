@@ -145,11 +145,12 @@ What would you like to do?
     <li>Bob lists at least one open issue from the seeded project.</li>
     <li>No "Unauthorized" or "Not Found" errors appear.</li>
   </ul>
-  <p>If this step fails, check <code>GITLAB_TOKEN</code> in
-  <code>bob-kit/mcp-server/.env</code> and confirm the MCP server live smoke test
-  passes:</p>
+  <p>If this step fails, check <code>GITLAB_TOKEN</code> in the repo-root
+  <code>.env</code> (not <code>bob-kit/mcp-server/.env</code> — that file isn't what Bob's
+  spawned MCP server reads) and confirm the MCP server live smoke test passes against
+  that same file:</p>
   <pre><code>cd bob-kit/mcp-server
-SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smoke</code></pre>
 
   <hr>
 

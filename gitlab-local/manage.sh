@@ -13,7 +13,10 @@ case "${1:-}" in
   start)
     echo "Starting GitLab..."
     docker compose up -d
-    echo "GitLab starting — check status with: $0 status"
+    # Block until the stack is verifiably ready (or fails) instead of handing
+    # control back immediately — smoke.sh polls the sign-in page for up to
+    # 300s and exits non-zero if GitLab never comes up.
+    bash "$SCRIPT_DIR/smoke.sh"
     ;;
   stop)
     echo "Stopping GitLab..."
@@ -53,22 +56,10 @@ case "${1:-}" in
     # Poll the sign-in page, not the container healthcheck. Docker reports
     # "healthy" as soon as the container's own check passes, which happens well
     # before Rails can answer an API call — seeding against that gap is how you
-    # end up with a running GitLab and no group, project or issues.
-    echo "Waiting for GitLab to answer HTTP..."
-    for i in $(seq 1 40); do
-      status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-        "http://localhost:8080/users/sign_in" 2>/dev/null || echo "000")
-      if [ "$status" = "200" ]; then
-        echo "GitLab is serving."
-        break
-      fi
-      echo "  [$i/40] HTTP $status — retrying in 15s..."
-      sleep 15
-      if [ "$i" -eq 40 ]; then
-        echo "ERROR: GitLab did not start serving within 10 minutes."
-        exit 1
-      fi
-    done
+    # end up with a running GitLab and no group, project or issues. Reuses
+    # smoke.sh's wait loop (same one "start" uses) instead of a second,
+    # drifted copy of the same polling logic.
+    bash "$SCRIPT_DIR/smoke.sh"
     echo "Reseeding..."
     bash "$SCRIPT_DIR/seed.sh"
     bash "$SCRIPT_DIR/seed-issues.sh"

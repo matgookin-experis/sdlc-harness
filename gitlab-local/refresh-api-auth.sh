@@ -51,12 +51,15 @@ ENV_TMP="$TMP_DIR/runtime.env"
 if [ -f "$RUNTIME_ENV" ]; then
   awk -F= '$1 != "GITLAB_TOKEN" { print }' "$RUNTIME_ENV" > "$ENV_TMP"
 else
-  {
-    echo 'GITLAB_HOST=http://localhost:8080'
-    echo 'GITLAB_PROJECT=sdlc-harness/weather-dashboard'
-    echo 'SDLC_DEBUG=false'
-  } > "$ENV_TMP"
+  : > "$ENV_TMP"
 fi
+# Backfill GITLAB_HOST/GITLAB_PROJECT if this .env is pre-existing (e.g. from
+# an unrelated template, such as this repo's WatsonX .env.example) and never
+# had them — a rotate-only token append would otherwise leave the MCP server
+# permanently missing two of its three required variables.
+grep -q '^GITLAB_HOST=' "$ENV_TMP" || echo 'GITLAB_HOST=http://localhost:8080' >> "$ENV_TMP"
+grep -q '^GITLAB_PROJECT=' "$ENV_TMP" || echo 'GITLAB_PROJECT=sdlc-harness/weather-dashboard' >> "$ENV_TMP"
+grep -q '^SDLC_DEBUG=' "$ENV_TMP" || echo 'SDLC_DEBUG=false' >> "$ENV_TMP"
 printf 'GITLAB_TOKEN=%s\n' "$TOKEN" >> "$ENV_TMP"
 chmod 600 "$ENV_TMP"
 mv "$ENV_TMP" "$RUNTIME_ENV"

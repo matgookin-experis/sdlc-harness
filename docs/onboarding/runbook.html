@@ -61,29 +61,21 @@
   <p>From the <code>gitlab-local/</code> directory:</p>
   <pre><code>cd gitlab-local
 ./manage.sh start</code></pre>
-  <p>GitLab CE takes <strong>3–5 minutes</strong> to initialise on first boot. You can
-  monitor progress:</p>
-  <pre><code>./manage.sh logs          # follow all container logs (Ctrl+C to stop)
-./manage.sh status        # check container health</code></pre>
-  <p>Wait until <code>manage.sh status</code> shows <code>healthy</code> for the
-  <code>gitlab</code> container, or until you can open
-  <strong>http://localhost:8080</strong> in a browser and see the GitLab login page.</p>
+  <p>GitLab CE takes <strong>3–5 minutes</strong> to initialise on first boot.
+  <code>./manage.sh start</code> polls automatically and blocks until the stack is
+  verifiably healthy or definitively fails (300s timeout) — there's nothing to watch for
+  separately or guess at by opening a browser. Expected output ends with:</p>
+  <pre><code>✓ GitLab returned HTTP 200
+✓ Demo site (weather app) returned HTTP 200
+
+ All checks passed — stack is healthy.</code></pre>
+  <p><strong>If it times out instead, check <code>./manage.sh logs</code> for errors
+  before continuing.</strong> (You can re-run the same check standalone at any time with
+  <code>./smoke.sh</code> — useful after e.g. a laptop sleep, without restarting anything.)</p>
 
   <hr>
 
-  <h2>Step 3 — Verify the stack is healthy</h2>
-  <p>Run the smoke test (from <code>gitlab-local/</code>):</p>
-  <pre><code>./smoke.sh</code></pre>
-  <p>Expected output:</p>
-  <pre><code>✓ GitLab HTTP 200  (http://localhost:8080/users/sign_in)
-✓ Demo site HTTP 200  (http://localhost:8081)
-All checks passed.</code></pre>
-  <p><strong>Do not continue until smoke.sh exits 0.</strong> If it fails, check
-  <code>./manage.sh logs</code> for errors.</p>
-
-  <hr>
-
-  <h2>Step 4 — Seed demo data</h2>
+  <h2>Step 3 — Seed demo data</h2>
   <p>Still from <code>gitlab-local/</code>:</p>
   <pre><code>./manage.sh seed</code></pre>
   <p>This creates:</p>
@@ -102,7 +94,7 @@ All checks passed.</code></pre>
 
   <hr>
 
-  <h2>Step 5 — Install and build the MCP server</h2>
+  <h2>Step 4 — Install and build the MCP server</h2>
   <p>From the <strong>project root</strong> (<code>sdlc-harness/</code>):</p>
   <pre><code>bash bob-kit/mcp-server/install.sh</code></pre>
   <p>This:</p>
@@ -124,10 +116,19 @@ Installation complete.</code></pre>
 
   <hr>
 
-  <h2>Step 6 — Configure MCP server credentials</h2>
-  <p>Copy the MCP server env example and fill in your GitLab credentials:</p>
-  <pre><code>cp bob-kit/mcp-server/.env.example bob-kit/mcp-server/.env</code></pre>
-  <p>Open <code>bob-kit/mcp-server/.env</code> and set:</p>
+  <h2>Step 5 — Configure MCP server credentials</h2>
+  <p>The MCP server is a <code>stdio</code> server that Bob spawns itself — there's no
+  separate process to start — but it reads its config from the <strong>project root</strong>
+  <code>.env</code> (via <code>SDLC_ENV_FILE</code>, set automatically when Step 4 merged
+  Bob's config), not from anything inside <code>bob-kit/mcp-server/</code>. Getting this
+  file wrong is the most common cause of the MCP server showing
+  <strong>Disconnected</strong> in Bob with no further explanation: it exits immediately at
+  startup if any of these are missing, silently unless <code>SDLC_DEBUG=true</code>.</p>
+  <p>From the <strong>project root</strong> (<code>sdlc-harness/</code>):</p>
+  <pre><code>cp bob-kit/mcp-server/.env.example .env</code></pre>
+  <p>If <code>.env</code> already exists there for something else (e.g. a WatsonX API
+  key), <strong>merge</strong> the variables below into it instead of overwriting it.</p>
+  <p>Open the project-root <code>.env</code> and set:</p>
   <table>
     <thead><tr><th>Variable</th><th>Value</th></tr></thead>
     <tbody>
@@ -143,22 +144,28 @@ Installation complete.</code></pre>
     <li>Go to <strong>User → Edit profile → Access Tokens</strong>.</li>
     <li>Create a token named <code>sdlc-harness-mcp</code> with <code>api</code> scope
     and any expiry you like.</li>
-    <li>Copy the token value into <code>GITLAB_TOKEN</code> in your <code>.env</code>.</li>
+    <li>Copy the token value into <code>GITLAB_TOKEN</code> in the project-root
+    <code>.env</code>.</li>
   </ol>
+  <p>Alternatively, from <code>gitlab-local/</code>, <code>./manage.sh refresh-token</code>
+  mints and writes a scoped token into the project-root <code>.env</code> for you.</p>
 
   <hr>
 
-  <h2>Step 7 — Run the live smoke test</h2>
-  <p>Confirm the MCP server can reach GitLab:</p>
+  <h2>Step 6 — Run the live smoke test</h2>
+  <p>Confirm the MCP server can reach GitLab, reading the <strong>same</strong>
+  project-root <code>.env</code> Bob's spawned server will use (this command's default
+  working directory would otherwise resolve a different, local <code>.env</code> inside
+  <code>bob-kit/mcp-server/</code>):</p>
   <pre><code>cd bob-kit/mcp-server
-SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
+SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smoke</code></pre>
   <p>Expected output: all checks pass and your GitLab username is printed.</p>
-  <p>If this step fails, check <code>GITLAB_TOKEN</code> and <code>GITLAB_HOST</code> in
-  your <code>.env</code>.</p>
+  <p>If this step fails, check <code>GITLAB_TOKEN</code>, <code>GITLAB_HOST</code>, and
+  <code>GITLAB_PROJECT</code> in the project-root <code>.env</code> (Step 5).</p>
 
   <hr>
 
-  <h2>Step 8 — Open Bob and activate the sdlc-harness skill</h2>
+  <h2>Step 7 — Open Bob and activate the sdlc-harness skill</h2>
   <ol>
     <li>Restart Bob so it picks up the newly merged config (close and reopen, or use the
     reload command if your IDE supports it).</li>
@@ -173,7 +180,7 @@ SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
 
   <hr>
 
-  <h2>Step 9 — Complete the onboarding conversation</h2>
+  <h2>Step 8 — Complete the onboarding conversation</h2>
   <p>Bob will ask four questions. Use the values below for the demo project:</p>
   <table>
     <thead><tr><th>Question</th><th>Answer</th></tr></thead>
@@ -189,7 +196,7 @@ SDLC_SMOKE_LIVE=true npm run smoke</code></pre>
 
   <hr>
 
-  <h2>Step 10 — Verify the skill is ready</h2>
+  <h2>Step 9 — Verify the skill is ready</h2>
   <p>After onboarding, Bob should print a confirmation summary and offer the governance
   action menu:</p>
   <pre><code>✅ Onboarding complete. Governing: sdlc-harness/weather-dashboard
@@ -214,7 +221,7 @@ What would you like to do?
       <tr><td>Demo site</td><td>http://localhost:8081</td></tr>
       <tr><td>Root login</td><td><code>root</code> / your <code>GITLAB_ROOT_PASSWORD</code></td></tr>
       <tr><td>Demo login</td><td><code>demo</code> / your <code>GITLAB_ROOT_PASSWORD</code></td></tr>
-      <tr><td>MCP server credentials</td><td><code>bob-kit/mcp-server/.env</code></td></tr>
+      <tr><td>MCP server credentials</td><td><code>.env</code> (repo root — not <code>bob-kit/mcp-server/.env</code>)</td></tr>
       <tr><td>Telemetry log</td><td><code>sdlc-harness-telemetry.jsonl</code> (repo root, gitignored)</td></tr>
     </tbody>
   </table>
@@ -229,7 +236,8 @@ What would you like to do?
       <tr><td><code>seed.sh</code> fails with "Could not create API token"</td><td>GitLab is not fully up, wait and retry</td></tr>
       <tr><td><code>install.sh</code> fails: "node is not installed"</td><td>Either Node.js ≥18 is genuinely missing, <strong>or</strong> (Windows) <code>bash</code> resolved to WSL instead of Git Bash — WSL has its own separate Node install (or none). Run <code>where bash</code> to check; if it points to <code>System32</code>, invoke Git Bash directly: <code>"C:\Program Files\Git\bin\bash.exe" bob-kit/mcp-server/install.sh</code></td></tr>
       <tr><td>Bob doesn't show <code>🔧 SDLC Harness</code> mode</td><td>Restart Bob; check <code>~/.bob/settings/custom_modes.yaml</code> contains <code>sdlc-harness</code></td></tr>
-      <tr><td>MCP live smoke fails: "Unauthorized"</td><td>Check <code>GITLAB_TOKEN</code> in <code>bob-kit/mcp-server/.env</code>; recreate the PAT if expired</td></tr>
+      <tr><td>Bob's MCP panel shows <code>sdlc-harness</code> as <strong>Disconnected</strong>, no error shown</td><td>The server exits immediately (silently) if <code>GITLAB_HOST</code>/<code>GITLAB_PROJECT</code>/<code>GITLAB_TOKEN</code> are missing from the repo-root <code>.env</code> — not <code>bob-kit/mcp-server/.env</code> (see Step 5). Fix the file, then reconnect the server from Bob's MCP settings or restart Bob.</td></tr>
+      <tr><td>MCP live smoke fails: "Unauthorized"</td><td>Check <code>GITLAB_TOKEN</code> in the repo-root <code>.env</code>; recreate the PAT if expired</td></tr>
       <tr><td><code>.sdlc-harness.json</code> not created after onboarding</td><td>The skill config persistence requires the onboarding flow to complete all four questions</td></tr>
     </tbody>
   </table>

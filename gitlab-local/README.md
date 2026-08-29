@@ -33,19 +33,16 @@ cd gitlab-local
 cp .env.example .env
 #    Edit .env and set GITLAB_ROOT_PASSWORD (minimum 8 characters, no '$' — see Troubleshooting)
 
-# 2. Start the stack (first boot takes 3–5 minutes)
-docker compose up -d
+# 2. Start the stack (first boot takes 3–5 minutes; blocks until healthy or fails)
+./manage.sh start
 
-# 3. Verify the stack is healthy
-./smoke.sh
-
-# 4. Seed demo data (run once after first boot)
+# 3. Seed demo data (run once after first boot)
 ./manage.sh seed
 
-# 5. Seed intentionally-incomplete demo issues for agent demo
+# 4. Seed intentionally-incomplete demo issues for agent demo
 ./manage.sh seed-issues
 
-# 6. Create/refresh the API token used by the MCP server and live tests
+# 5. Create/refresh the API token used by the MCP server and live tests
 ./manage.sh refresh-token
 ```
 
@@ -104,8 +101,8 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 
 | Command                       | Description                                           |
 |-------------------------------|-------------------------------------------------------|
-| `./smoke.sh`                  | Validate full stack health (exit 0 = OK)              |
-| `./manage.sh start`           | Start the stack                                       |
+| `./smoke.sh`                  | Validate full stack health on demand (exit 0 = OK) — run automatically by `start`/`reset`, but safe to re-run anytime (e.g. after a laptop sleep) |
+| `./manage.sh start`           | Start the stack — blocks until healthy or fails, no need to run `smoke.sh` separately |
 | `./manage.sh stop`            | Stop the stack                                        |
 | `./manage.sh restart`         | Restart the stack                                     |
 | `./manage.sh seed`            | Seed demo users, group, and project                   |
@@ -237,13 +234,16 @@ To wipe all data and start fresh (e.g. for a clean demo re-take):
 ./manage.sh reset -y       # skips the confirmation prompt
 ```
 
-This tears down the stack including volumes, boots fresh, waits for GitLab to report
-`healthy`, then re-runs `seed` and `seed-issues` — a single idempotent command instead
-of four manual steps. Equivalent to running by hand:
+This tears down the stack including volumes, boots fresh, waits for GitLab to actually
+answer HTTP (via `smoke.sh` — not just the container's own healthcheck, which reports
+"healthy" well before Rails can serve a request), then re-runs `seed` and `seed-issues`
+— a single idempotent command instead of four manual steps. Equivalent to running by
+hand:
 
 ```bash
 docker compose down -v
 docker compose up -d
+./smoke.sh
 ./manage.sh seed
 ./manage.sh seed-issues
 ```

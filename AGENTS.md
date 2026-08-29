@@ -22,10 +22,10 @@ This file provides guidance to agents when working with code in this repository.
 ## Key Commands
 
 ```bash
-# Start the full stack (first boot takes 3–5 minutes)
-cd gitlab-local && docker compose up -d
+# Start the full stack (first boot takes 3–5 minutes; blocks until healthy or fails)
+cd gitlab-local && ./manage.sh start
 
-# Validate stack health (polls until HTTP 200/302 or 300 s timeout)
+# Re-run the health check on demand (start/reset already run this automatically)
 ./gitlab-local/smoke.sh
 
 # Seed / reset demo data (idempotent — safe to re-run)
@@ -34,11 +34,8 @@ cd gitlab-local && docker compose up -d
 # Rotate the local MCP/live-test token without displaying it
 ./gitlab-local/manage.sh refresh-token
 
-# Full wipe and reseed (clean demo state)
-cd gitlab-local && docker compose down -v && docker compose up -d && ./manage.sh seed
-
-# Other manage.sh sub-commands: start | stop | restart | logs | status | password
-./gitlab-local/manage.sh status
+# Full wipe and reseed (clean demo state) — waits for health before reseeding
+cd gitlab-local && ./manage.sh reset -y
 ```
 
 ## Critical Gotchas

@@ -38,8 +38,7 @@ the governance work.
    ```bash
    cd gitlab-local
    cp .env.example .env   # set GITLAB_ROOT_PASSWORD
-   docker compose up -d   # first boot takes 3-5 minutes
-   ./smoke.sh              # confirms both containers are healthy
+   ./manage.sh start        # first boot takes 3-5 minutes; blocks until healthy or fails
    ./manage.sh seed         # creates the demo group, user, and project
    ./manage.sh seed-issues  # seeds 12 intentionally incomplete issues for the agents to act on
    ```
@@ -57,7 +56,20 @@ the governance work.
    installer, including how to point Bob's WatsonX provider at
    `ibm/granite-3-3-8b-instruct`.
 
-3. In Bob, switch to the `🔧 SDLC Harness` mode and say something like `govern my backlog`.
+3. Give the MCP server your GitLab credentials. It's a `stdio` server that Bob spawns
+   itself (no separate process to run) — but it exits immediately if these are missing,
+   which shows up in Bob as `Disconnected` with no further explanation. Add the following
+   to the **repo-root** `.env` (a different file from `gitlab-local/.env` used in step 1 —
+   merge into it, don't overwrite it, if it already exists for something else, e.g. a
+   WatsonX API key):
+   ```bash
+   GITLAB_HOST=http://localhost:8080
+   GITLAB_PROJECT=sdlc-harness/weather-dashboard
+   GITLAB_TOKEN=<from ./gitlab-local/manage.sh refresh-token, or a GitLab PAT>
+   ```
+   Then restart Bob (or reconnect the `sdlc-harness` server from Bob's MCP settings panel).
+
+4. In Bob, switch to the `🔧 SDLC Harness` mode and say something like `govern my backlog`.
    The skill walks through a short onboarding conversation the first time, then runs the
    agents against the seeded issues. The full onboarding runbook is in
    [docs/onboarding/runbook.html](docs/onboarding/runbook.html).
