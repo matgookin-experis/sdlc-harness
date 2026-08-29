@@ -37,6 +37,12 @@ fi
 
 GITLAB_URL="http://localhost:8080"
 
+# Use a temp dir relative to SCRIPT_DIR so its path resolves to a real Windows
+# filesystem path (not /tmp) — docker cp requires a path that Windows can resolve.
+TMP_DIR="$SCRIPT_DIR/.seed-issues-tmp"
+mkdir -p "$TMP_DIR"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
 # ── Wait for GitLab ───────────────────────────────────────────────────────────
 echo "Waiting for GitLab to be ready..."
 for i in $(seq 1 20); do
@@ -54,24 +60,33 @@ for i in $(seq 1 20); do
 done
 
 # ── Get or create API token ───────────────────────────────────────────────────
+# The Ruby script is written to a local temp file and streamed into the container
+# via stdin (docker exec -i ... < file) rather than passed as an inline quoted
+# argument — see seed.sh for why: on Git Bash for Windows, an inline multi-line
+# quoted argument to `gitlab-rails runner "..."` can hang or get mis-parsed
+# depending on the MSYS/pwsh layer invoking bash. Streaming via stdin sidesteps
+# all of that.
 echo ""
 echo "Creating API token..."
-docker exec gitlab gitlab-rails runner "
-  begin
-    PersonalAccessToken.where(name: 'seed-issues-token', user_id: 1).delete_all
-    token = User.find(1).personal_access_tokens.create!(
-      name: 'seed-issues-token',
-      scopes: [:api],
-      expires_at: Date.today + 365
-    )
-    File.write('/tmp/seed_issues_token.txt', token.token)
-  rescue => e
-    File.write('/tmp/seed_issues_token.txt', 'ERROR: ' + e.message)
-  end
-" 2>/dev/null
+cat > "$TMP_DIR/runner.rb" <<'RUBY'
+begin
+  PersonalAccessToken.where(name: 'seed-issues-token', user_id: 1).delete_all
+  token = User.find(1).personal_access_tokens.create!(
+    name: 'seed-issues-token',
+    scopes: [:api],
+    expires_at: Date.today + 365
+  )
+  File.write('/tmp/seed_issues_token.txt', token.token)
+rescue => e
+  File.write('/tmp/seed_issues_token.txt', 'ERROR: ' + e.message)
+end
+RUBY
+MSYS_NO_PATHCONV=1 docker exec -i gitlab sh -c 'cat > /tmp/runner.rb' < "$TMP_DIR/runner.rb" 2>/dev/null
+MSYS_NO_PATHCONV=1 docker exec gitlab gitlab-rails runner /tmp/runner.rb 2>/dev/null
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/runner.rb 2>/dev/null || true
 
-TOKEN=$(docker exec gitlab cat /tmp/seed_issues_token.txt 2>/dev/null || true)
-docker exec gitlab rm -f /tmp/seed_issues_token.txt 2>/dev/null || true
+TOKEN=$(MSYS_NO_PATHCONV=1 docker exec gitlab cat /tmp/seed_issues_token.txt 2>/dev/null || true)
+MSYS_NO_PATHCONV=1 docker exec gitlab rm -f /tmp/seed_issues_token.txt 2>/dev/null || true
 
 if [ -z "$TOKEN" ] || [[ "$TOKEN" == ERROR:* ]]; then
   echo "ERROR: Could not create API token: $TOKEN"
@@ -131,6 +146,20 @@ ensure_label "Task"   "#5CB85C"
 ensure_label "Epic"   "#8E44AD"
 
 # ── Helper: create issue (idempotent by title) ────────────────────────────────
+# Title/description are passed to python via environment variables, never
+# interpolated into inline `python3 -c "..."` source and never read from a
+# file path built from bash's own $PWD. Two reasons:
+#  1. Descriptions are multi-line — embedding them directly into a
+#     single-quoted Python string literal breaks as soon as it hits a real
+#     newline (Python single-quoted strings don't span physical lines).
+#  2. On Git Bash for Windows, `pwd` yields an MSYS-style path (e.g. `/c/...`).
+#     Bash's own `<file` redirection understands that transparently, but a
+#     *native Windows* python3.exe's own open('/c/...') does not — it silently
+#     raises FileNotFoundError, which a trailing `2>/dev/null || true` then
+#     swallows, making every already-created issue look "not found" and
+#     seeding duplicates on every re-run.
+# Environment variables sidestep both: no source-code embedding, no path
+# translation, exact bytes preserved on any platform.
 create_issue() {
   local title="$1"
   local description="$2"
@@ -138,11 +167,15 @@ create_issue() {
   local state="${4:-opened}"   # opened | closed
 
   # Skip if an issue with this exact title already exists
+  local encoded_title
+  encoded_title=$(TITLE="$title" python3 -c "import os, urllib.parse; print(urllib.parse.quote(os.environ['TITLE'], safe=''))")
+
   local existing
-  existing=$(api GET "projects/$PROJECT_ID/issues?search=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$title', safe=''))")&per_page=100" \
-    | python3 -c "
-import sys, json
-issues = [i for i in json.load(sys.stdin) if i['title'] == '''$title''']
+  existing=$(api GET "projects/$PROJECT_ID/issues?search=${encoded_title}&per_page=100" \
+    | TITLE="$title" python3 -c "
+import sys, json, os
+title = os.environ['TITLE']
+issues = [i for i in json.load(sys.stdin) if i['title'] == title]
 print(issues[0]['iid'] if issues else '')
 " 2>/dev/null || true)
 
@@ -151,10 +184,14 @@ print(issues[0]['iid'] if issues else '')
     return
   fi
 
+  local title_json desc_json
+  title_json=$(TITLE="$title" python3 -c "import os, json; print(json.dumps(os.environ['TITLE']))")
+  desc_json=$(DESC="$description" python3 -c "import os, json; print(json.dumps(os.environ['DESC']))")
+
   local iid
   iid=$(api POST "projects/$PROJECT_ID/issues" \
-    -d "{\"title\":$(python3 -c "import json; print(json.dumps('$title'))"),
-        \"description\":$(python3 -c "import json; print(json.dumps('$description'))"),
+    -d "{\"title\":${title_json},
+        \"description\":${desc_json},
         \"labels\":\"$labels\"}" \
     | python3 -c "import sys,json; print(json.load(sys.stdin)['iid'])")
 

@@ -1,5 +1,12 @@
 # Credentials are read from a gitignored .env file in this directory.
 # Copy .env.example to .env and set GITLAB_ROOT_PASSWORD before starting.
+#
+# NOTE: public sign-up is disabled via the GitLab Application Settings API in
+# seed.sh, not here. `signup_enabled` is an ApplicationSetting DB column with
+# no omnibus/gitlab.rb attribute bridge — there is no `gitlab_rails[...]` key
+# for it, so it cannot be set via GITLAB_OMNIBUS_CONFIG at all (confirmed
+# against the omnibus-gitlab attributes source). The API/Admin UI are the
+# only supported ways to change it.
 
 services:
   gitlab:

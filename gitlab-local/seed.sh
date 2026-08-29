@@ -118,6 +118,18 @@ api() {
     "$GITLAB_URL/api/v4/$path" "$@"
 }
 
+# ── 0. Disable public sign-up ─────────────────────────────────────────────────
+# This is a closed demo instance — only root and the seeded 'demo' user should
+# ever be able to log in. NOTE: gitlab_rails['gitlab_signup_enabled'] in
+# docker-compose.yml only seeds this on a genuinely first-ever boot (a fresh
+# volume) — omnibus deliberately does not re-apply ApplicationSetting-backed
+# config on every reconfigure, so it never overwrites changes made via the
+# Admin UI. On an already-provisioned instance that line is a no-op, so it is
+# enforced here too via the API, which works regardless of volume age.
+echo "Disabling public sign-up..."
+api PUT "application/settings" -d '{"signup_enabled":false}' > /dev/null
+echo "  signup_enabled=false"
+
 # ── 1. Create demo group ──────────────────────────────────────────────────────
 echo ""
 echo "Setting up demo group..."
