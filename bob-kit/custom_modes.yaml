@@ -32,11 +32,25 @@ customModes:
       - Weather app source lives in weather-app/.
       - Use the `sdlc-harness` MCP server (registered as "sdlc-harness" in mcp.json) for
         all GitLab API calls — never use curl or glab directly.
-      - WatsonX model in use: ibm/granite-3-3-8b-instruct via Bob's configured provider.
-        For long-context tasks (full-backlog audit, dependency graph) prefer
-        ibm/granite-3-3-8b-instruct with a 128k context window.
-        For fast single-issue tasks (AC drafting, ambiguity check) the same model is fine
-        at its default context size.
+      - WatsonX model in use: ibm/granite-3-3-8b-instruct via Bob's configured provider
+        (Bob IDE → Settings → Providers → WatsonX — see bob-kit/README.md for setup).
+        Per-agent-role rationale (all five agents share one model; the difference is
+        whether a role calls it at all, and for what):
+          • AC Agent        — DOES call the model: writes the GWT criteria prose from the
+            agent's DraftBrief. Single issue in scope at a time → default context size.
+          • Ambiguity Agent — DOES call the model: rewrites flagged phrases in the
+            author's voice. Single issue in scope → default context size.
+          • Dependency Agent — does NOT call the model. Jaccard token-overlap scoring is
+            deterministic code (dependency-agent.ts); the model's only role is relaying
+            the report to the user.
+          • Transition Agent — does NOT call the model. State-transition validity is a
+            BFS over transitionRules (state-transition-agent.ts), not a generation task.
+          • Coverage Agent (P1) — does NOT call the model. Test-reference matching is
+            plain regex/string search (coverage-agent.ts).
+        The one place context window matters: a full-backlog **Audit** (all agents,
+        all open issues) asks the model to compile/summarize many findings in one pass —
+        prefer ibm/granite-3-3-8b-instruct's 128k context window for that specific
+        orchestration step, not because any individual agent's logic needs it.
       - Telemetry is appended to sdlc-harness-telemetry.jsonl in the repo root.
         Log format: { ts, agent, issueIid, action, outcome, editedFields }.
       - Never auto-approve suggestions. Every change requires the user to say "apply",

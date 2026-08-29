@@ -8,6 +8,22 @@ Runs a self-hosted GitLab CE instance and a static demo site locally via Docker,
 - Docker Compose v2+
 - Python 3 (for the seed script — available on most systems)
 
+### Minimum host requirements
+
+| Resource | Minimum | Recommended |
+|---|---|---|
+| RAM | 4 GB free | 8 GB free |
+| CPU | 2 cores | 4 cores |
+| Disk | 10 GB free | 20 GB free |
+
+`docker-compose.yml` is already tuned down for local/demo use (`puma['worker_processes'] = 2`,
+`sidekiq['concurrency'] = 5`, `prometheus_monitoring['enable'] = false`) — GitLab CE's own
+[hardware requirements](https://docs.gitlab.com/ee/install/requirements.html) recommend 8 GB+ for
+a comfortable experience, but this configuration has been run successfully at the 4 GB minimum for
+demo purposes. If you're on Docker Desktop (Windows/Mac), make sure its own VM resource limits
+(Settings → Resources) are set at or above these values — the container can't use more memory or
+CPU than Docker Desktop itself is allowed.
+
 ## Quick Start
 
 ```bash
