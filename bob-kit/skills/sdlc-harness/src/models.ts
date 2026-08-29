@@ -23,6 +23,11 @@ export interface ProjectConfig {
   workflowStates: string[];
   /** Valid state transitions: { "Open": ["In Progress"], ... } */
   transitionRules: TransitionRules;
+  /**
+   * Enable directional blocking links only when the GitLab tier supports them.
+   * The local GitLab CE demo leaves this false and uses relates-to links.
+   */
+  blockingIssueLinks?: boolean;
   /** Optional test-coverage linkage config (Task 24 — P1, disabled by default). */
   coverage?: CoverageConfig;
 }

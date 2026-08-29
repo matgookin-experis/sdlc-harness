@@ -89,4 +89,4 @@ await testUserStoryIncludesConnextraRule();
 await testBugIncludesStepsToReproduce();
 await testUserStoryAcFormatIncludesGwt();
 
-console.log('work-item-format.test.ts: all assertions passed');
+process.stdout.write('work-item-format.test.ts: all assertions passed\n');

@@ -105,7 +105,7 @@ const HIGH_CONFIDENCE_THRESHOLD = 0.25;
  */
 export async function runDependencyAgent(
   issues: IssueInput[],
-  _config: ProjectConfig
+  config: ProjectConfig
 ): Promise<DependencyFinding[]> {
   const findings: DependencyFinding[] = [];
   const seenPairs = new Set<string>();
@@ -146,12 +146,12 @@ export async function runDependencyAgent(
       let sourceIid: number;
       let targetIid: number;
 
-      if (aIsDependent && !bIsDependent) {
+      if (config.blockingIssueLinks === true && aIsDependent && !bIsDependent) {
         // A depends on B → B blocks A
         suggestedLinkType = 'blocks';
         sourceIid = b.iid;
         targetIid = a.iid;
-      } else if (bIsDependent && !aIsDependent) {
+      } else if (config.blockingIssueLinks === true && bIsDependent && !aIsDependent) {
         // B depends on A → A blocks B
         suggestedLinkType = 'blocks';
         sourceIid = a.iid;
@@ -178,7 +178,9 @@ export async function runDependencyAgent(
           `(similarity ${(similarity * 100).toFixed(0)}%). ` +
           (suggestedLinkType === 'blocks'
             ? 'Dependency language detected — one issue appears to block or require the other.'
-            : 'The issues address related topics and likely benefit from explicit cross-referencing.'),
+            : config.blockingIssueLinks === true
+              ? 'The issues address related topics and likely benefit from explicit cross-referencing.'
+              : 'The issues address related topics; this GitLab configuration uses CE-compatible relates-to links.'),
         confidence,
       });
     }

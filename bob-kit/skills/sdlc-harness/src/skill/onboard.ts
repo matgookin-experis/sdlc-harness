@@ -18,6 +18,8 @@ export interface OnboardInput {
   workItemTypes: string[];
   workflowStates: string[];
   transitionRules: TransitionRules;
+  /** Enable Premium/Ultimate directional blocking issue links. Defaults to false. */
+  blockingIssueLinks?: boolean;
   /** Optional — pass only when the user explicitly opts in to coverage tracking (Task 24). */
   coverage?: CoverageConfig;
 }
@@ -110,6 +112,9 @@ export async function onboard(input: OnboardInput): Promise<OnboardResult> {
     workItemTypes: input.workItemTypes,
     workflowStates: input.workflowStates,
     transitionRules: input.transitionRules,
+    ...(input.blockingIssueLinks !== undefined
+      ? { blockingIssueLinks: input.blockingIssueLinks }
+      : {}),
     ...(input.coverage !== undefined ? { coverage: input.coverage } : {}),
   };
 

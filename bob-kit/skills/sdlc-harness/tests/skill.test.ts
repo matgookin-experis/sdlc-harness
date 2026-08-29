@@ -223,6 +223,15 @@ describe('Onboarding flow', () => {
     expect(result.ok).toBe(true);
     expect(result.config?.coverage).toBeUndefined();
   });
+
+  test('persists GitLab blocking-link capability when enabled', async () => {
+    const result = await onboard({
+      ...PROJECT_CONFIG,
+      blockingIssueLinks: true,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.config?.blockingIssueLinks).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -435,7 +444,10 @@ describe('Ambiguity agent', () => {
 
 describe('Dependency agent', () => {
   test('detects semantic overlap and proposes a blocks link', async () => {
-    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    const findings = await runDependencyAgent(
+      [ISSUE_AUTH_A, ISSUE_AUTH_B],
+      { ...PROJECT_CONFIG, blockingIssueLinks: true },
+    );
 
     // Should find at least one link proposal between issues 3 and 9
     const link = findings.find(
@@ -446,6 +458,12 @@ describe('Dependency agent', () => {
 
     expect(link).toBeDefined();
     expect(['blocks', 'relates-to']).toContain(link!.suggestedLinkType);
+  });
+
+  test('uses CE-compatible relates-to links when blocking links are disabled', async () => {
+    const findings = await runDependencyAgent([ISSUE_AUTH_A, ISSUE_AUTH_B], PROJECT_CONFIG);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.every((finding) => finding.suggestedLinkType === 'relates-to')).toBe(true);
   });
 
   test('returns empty findings for a set of unrelated issues', async () => {
@@ -739,6 +757,59 @@ describe('Human review interface', () => {
     expect(updateBody).toEqual({ description: rewritten });
   });
 
+  test('ambiguity rewrite preserves acceptance criteria already added to the issue', async () => {
+    let updateBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(JSON.stringify({
+          description: 'fix it\n\n## Acceptance Criteria\n**Given** a user\n**When** they save\n**Then** the value persists',
+          labels: ['Open'],
+          state: 'opened',
+        }), { status: 200 });
+      }
+      updateBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+    }));
+    const rewritten = 'Saving a preference returns HTTP 500 when the display name is empty.';
+    const result = await applyFinding(
+      { agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: rewritten },
+      { editedValue: null },
+      adapter,
+    );
+    expect(result.gitlabWriteCalled).toBe(true);
+    expect(updateBody['description']).toContain(rewritten);
+    expect(updateBody['description']).toContain('## Acceptance Criteria');
+    expect(updateBody['description']).toContain('the value persists');
+  });
+
+  test('ambiguity rewrite preserves bold acceptance-criteria sections', async () => {
+    let updateBody: Record<string, unknown> = {};
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(JSON.stringify({
+          description: 'fix it\n\n**Acceptance Criteria**\nGiven x\nWhen y\nThen z',
+          labels: ['Open'],
+          state: 'opened',
+        }), { status: 200 });
+      }
+      updateBody = JSON.parse(init.body as string) as Record<string, unknown>;
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open'],
+    }));
+    await applyFinding(
+      { agent: 'AM', issueIid: 2, action: 'rewrite_desc', suggestedValue: 'Specific replacement.' },
+      { editedValue: null },
+      adapter,
+    );
+    expect(updateBody['description']).toContain('**Acceptance Criteria**');
+    expect(updateBody['description']).toContain('Then z');
+  });
+
   test('real adapter replaces workflow labels for a state transition', async () => {
     let updateBody: Record<string, unknown> = {};
     const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
@@ -765,6 +836,7 @@ describe('Human review interface', () => {
     });
     const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
       host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: [],
+      blockingIssueLinks: true,
     }));
     const depFinding: DependencyFinding = {
       agent: 'DEP', sourceIid: 3, targetIid: 9, suggestedLinkType: 'blocks', confidence: 0.9,
@@ -772,6 +844,55 @@ describe('Human review interface', () => {
     const result = await applyFinding(depFinding, { editedValue: null }, adapter);
     expect(result.gitlabWriteCalled).toBe(true);
     expect(linkBody).toEqual({ target_project_id: 42, target_issue_iid: 9, link_type: 'blocks' });
+  });
+
+  test('real adapter rejects blocks links when the GitLab tier capability is disabled', async () => {
+    const fetchMock = jest.fn();
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: [],
+      blockingIssueLinks: false,
+    }));
+    const depFinding: DependencyFinding = {
+      agent: 'DEP', sourceIid: 3, targetIid: 9, suggestedLinkType: 'blocks', confidence: 0.9,
+    };
+    const result = await applyFinding(depFinding, { editedValue: null }, adapter);
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.error).toMatch(/disabled.*tier/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('real adapter blocks writes when runtime and onboarded projects differ', async () => {
+    const fetchMock = jest.fn();
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test',
+      project: 'wrong/project',
+      token: 'secret',
+      workflowStates: ['Open'],
+      scopeError: 'Configured GitLab project does not match the onboarded project.',
+    }));
+    const result = await applyFinding(finding, { editedValue: null }, adapter);
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.error).toMatch(/does not match/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('real adapter rejects an edited state outside the onboarded workflow', async () => {
+    const fetchMock = jest.fn(async (_url: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(JSON.stringify({ description: '', labels: ['Open'], state: 'opened' }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    });
+    const adapter = createGitLabRestWriterAdapter(fetchMock, () => ({
+      host: 'http://gitlab.test', project: 'group/project', token: 'secret', workflowStates: ['Open', 'Done'],
+    }));
+    const result = await applyFinding(
+      { agent: 'ST', issueIid: 5, action: 'state_transition', suggestedValue: 'In Review' },
+      { editedValue: 'Made Up State' },
+      adapter,
+    );
+    expect(result.gitlabWriteCalled).toBe(false);
+    expect(result.error).toMatch(/unknown workflow state/i);
   });
 
   test('P1-5: DependencyFinding can be passed to rejectFinding', async () => {

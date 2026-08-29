@@ -15,7 +15,7 @@
  *  6. gitlab-mr-reader-writer routes correctly.
  *  7. MCP transport integration via InMemoryTransport.createLinkedPair():
  *     - createServer() builds a connected server without spawning a subprocess.
- *     - listTools() reports all four tools with non-empty input schemas
+ *     - listTools() reports all five tools with non-empty input schemas
  *       (the "action" field must be present in every schema).
  *     - Each tool is invoked through the MCP client (not directly via execute()).
  *     - Invalid actions return validation errors.
@@ -808,7 +808,7 @@ async function testGitLabApiError(): Promise<void> {
 /**
  * Verifies that createServer() + InMemoryTransport produces a working MCP
  * server without spawning a subprocess, and that:
- *  - listTools() returns all four tools
+ *  - listTools() returns all five tools
  *  - every tool has a non-empty input schema containing the "action" field
  *  - tools can be invoked through the MCP client (not by calling execute() directly)
  *  - invalid actions produce validation errors (not silent failures)
@@ -839,7 +839,7 @@ async function testMcpTransportIntegration(): Promise<void> {
       mcpClient.connect(clientTransport),
     ]);
 
-    // 1. listTools — all four tools present
+    // 1. listTools — all five tools present
     const { tools } = await mcpClient.listTools();
     const toolNames = tools.map((t) => t.name);
     const expectedTools = [
@@ -847,6 +847,7 @@ async function testMcpTransportIntegration(): Promise<void> {
       "gitlab-issue-writer",
       "gitlab-mr-reader-writer",
       "work-item-format",
+      "sdlc-review-decision",
     ];
     assert(tools.length === expectedTools.length, `listTools reports ${expectedTools.length} tools (got ${tools.length})`);
     for (const name of expectedTools) {
@@ -885,6 +886,28 @@ async function testMcpTransportIntegration(): Promise<void> {
       typeof fmtParsed.standard === "object" && fmtParsed.standard !== null,
       "work-item-format get-standard returns standard object via MCP transport"
     );
+
+    // Review runtime bridge — proves the fifth tool can load the compiled skill
+    // and return telemetry through the same MCP transport Bob uses.
+    const reviewTmp = mkdtempSync(join(tmpdir(), "sdlc-review-mcp-"));
+    const oldTelemetryPath = process.env["SDLC_TELEMETRY_PATH"];
+    process.env["SDLC_TELEMETRY_PATH"] = join(reviewTmp, "telemetry.jsonl");
+    try {
+      const reviewResult = await mcpClient.callTool({
+        name: "sdlc-review-decision",
+        arguments: { action: "summary" },
+      });
+      const reviewText = (reviewResult.content as Array<{ type: string; text: string }>)[0]?.text ?? "";
+      const reviewParsed = JSON.parse(reviewText) as { total?: number; approvalRate?: number };
+      assert(
+        reviewParsed.total === 0 && reviewParsed.approvalRate === 0,
+        "sdlc-review-decision loads the skill runtime and returns telemetry summary"
+      );
+    } finally {
+      if (oldTelemetryPath === undefined) delete process.env["SDLC_TELEMETRY_PATH"];
+      else process.env["SDLC_TELEMETRY_PATH"] = oldTelemetryPath;
+      rmSync(reviewTmp, { recursive: true, force: true });
+    }
 
     // 4. Invoke work-item-format validate-item through the MCP client
     const validateResult = await mcpClient.callTool({
@@ -972,7 +995,7 @@ async function testMcpStdioIntegration(): Promise<void> {
   try {
     await client.connect(transport);
     const { tools } = await client.listTools();
-    assert(tools.length === 4, "compiled stdio server publishes all four tools");
+    assert(tools.length === 5, "compiled stdio server publishes all five tools");
     const result = await client.callTool({
       name: "work-item-format",
       arguments: { action: "get-template", type: "Task" },

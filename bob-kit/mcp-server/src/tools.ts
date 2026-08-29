@@ -13,6 +13,7 @@ import { gitlabIssueReaderTool } from "./tools/gitlab-issue-reader.js";
 import { gitlabIssueWriterTool } from "./tools/gitlab-issue-writer.js";
 import { gitlabMrReaderWriterTool } from "./tools/gitlab-mr-reader-writer.js";
 import { workItemFormatTool } from "./tools/work-item-format.js";
+import { sdlcReviewDecisionTool } from "./tools/sdlc-review-decision.js";
 
 /**
  * The complete list of tools exposed by this MCP server.
@@ -24,4 +25,5 @@ export const TOOLS: ToolDefinition<any>[] = [
   gitlabIssueWriterTool,
   gitlabMrReaderWriterTool,
   workItemFormatTool,
+  sdlcReviewDecisionTool,
 ];

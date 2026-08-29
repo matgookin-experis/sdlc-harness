@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 usage() {
-  echo "Usage: $0 {start|stop|restart|seed|seed-issues|reset|password|logs|status}"
+  echo "Usage: $0 {start|stop|restart|seed|seed-issues|refresh-token|reset|password|logs|status}"
   exit 1
 }
 
@@ -30,6 +30,10 @@ case "${1:-}" in
   seed-issues)
     echo "Seeding demo issues..."
     bash "$SCRIPT_DIR/seed-issues.sh"
+    ;;
+  refresh-token)
+    echo "Refreshing the local MCP/API token..."
+    bash "$SCRIPT_DIR/refresh-api-auth.sh"
     ;;
   reset)
     # Idempotent full reset: wipe all GitLab data, boot fresh, wait for health,

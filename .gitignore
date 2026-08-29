@@ -127,3 +127,4 @@ sdlc-harness-telemetry.jsonl
 # seed-issues.sh scratch dir — removed by its EXIT trap, but survives if the
 # script is interrupted, and then shows up as an untracked file.
 gitlab-local/.seed-issues-tmp/
+gitlab-local/.token-tmp/

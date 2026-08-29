@@ -30,6 +30,8 @@ interface RuntimeConfig {
   project: string;
   token: string;
   workflowStates: string[];
+  blockingIssueLinks?: boolean;
+  scopeError?: string;
 }
 
 interface GitLabIssueResponse {
@@ -65,24 +67,40 @@ function parseEnvFile(filePath: string): Record<string, string> {
   return values;
 }
 
+function findUp(relativePath: string, startDirectory = process.cwd()): string | null {
+  let directory = path.resolve(startDirectory);
+  for (;;) {
+    const candidate = path.join(directory, relativePath);
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
+  }
+}
+
 function findEnvFile(): string | null {
   const candidates = [
     process.env['SDLC_ENV_FILE'],
-    path.join(process.cwd(), 'bob-kit', 'mcp-server', '.env'),
-    path.join(process.cwd(), '.env'),
+    findUp('.env'),
+    findUp(path.join('bob-kit', 'mcp-server', '.env')),
   ].filter((candidate): candidate is string => Boolean(candidate));
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
-function loadWorkflowStates(): string[] {
-  const configPath = process.env['SDLC_PROJECT_CONFIG'] ??
-    path.join(process.cwd(), '.sdlc-harness.json');
+function loadProjectConfig(): ProjectConfig | null {
+  const configPath = process.env['SDLC_PROJECT_CONFIG'] ?? findUp('.sdlc-harness.json');
+  if (!configPath) return null;
   try {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as ProjectConfig;
-    return Array.isArray(config.workflowStates) ? config.workflowStates : [];
+    return JSON.parse(fs.readFileSync(configPath, 'utf8')) as ProjectConfig;
   } catch {
-    return ['Open', 'In Progress', 'In Review', 'Done'];
+    return null;
   }
+}
+
+function normaliseProjectUrl(value: string): string {
+  const parsed = new URL(value);
+  const pathName = parsed.pathname.replace(/\.git\/?$/, '').replace(/\/$/, '');
+  return `${parsed.origin}${pathName}`.toLowerCase();
 }
 
 function loadRuntimeConfig(): RuntimeConfig | null {
@@ -92,11 +110,30 @@ function loadRuntimeConfig(): RuntimeConfig | null {
   const project = process.env['GITLAB_PROJECT'] ?? fileValues['GITLAB_PROJECT'];
   const token = process.env['GITLAB_TOKEN'] ?? fileValues['GITLAB_TOKEN'];
   if (!host || !project || !token) return null;
+  const projectConfig = loadProjectConfig();
+  let scopeError: string | undefined;
+  if (!projectConfig) {
+    scopeError = 'Project is not onboarded. Create .sdlc-harness.json before writing to GitLab.';
+  } else {
+    try {
+      const runtimeProjectUrl = normaliseProjectUrl(`${host.replace(/\/$/, '')}/${project}`);
+      const onboardedProjectUrl = normaliseProjectUrl(projectConfig.projectUrl);
+      if (runtimeProjectUrl !== onboardedProjectUrl) {
+        scopeError =
+          'Configured GitLab project does not match the onboarded project. ' +
+          'Update GITLAB_HOST/GITLAB_PROJECT or re-run onboarding.';
+      }
+    } catch {
+      scopeError = 'The onboarded GitLab project URL is invalid.';
+    }
+  }
   return {
     host: host.replace(/\/$/, ''),
     project,
     token,
-    workflowStates: loadWorkflowStates(),
+    workflowStates: projectConfig?.workflowStates ?? [],
+    blockingIssueLinks: projectConfig?.blockingIssueLinks === true,
+    scopeError,
   };
 }
 
@@ -106,6 +143,32 @@ function acceptanceCriteriaDescription(current: string | null, criteria: string)
     ? ''
     : '## Acceptance Criteria\n';
   return `${base}${base ? '\n\n' : ''}${heading}${criteria.trim()}`;
+}
+
+function extractAcceptanceCriteria(description: string | null): string | null {
+  if (!description) return null;
+  const heading = /^\s*(?:(#{1,6})\s+|\*\*)(acceptance criteria|ac|criteria)(?:\*\*)?\s*$/im.exec(description);
+  if (!heading || heading.index === undefined) return null;
+
+  const level = heading[1]?.length ?? 6;
+  const afterHeading = heading.index + heading[0].length;
+  const remainder = description.slice(afterHeading);
+  const nextHeading = new RegExp(`^\\s*#{1,${level}}\\s+`, 'm').exec(remainder);
+  const end = nextHeading?.index === undefined
+    ? description.length
+    : afterHeading + nextHeading.index;
+  return description.slice(heading.index, end).trim();
+}
+
+function ambiguityRewriteDescription(current: string | null, rewrite: string): string {
+  const replacement = rewrite.trim();
+  if (/^#{1,6}\s+(acceptance criteria|ac|criteria)\s*$/im.test(replacement)) {
+    return replacement;
+  }
+  const existingCriteria = extractAcceptanceCriteria(current);
+  return existingCriteria
+    ? `${replacement}\n\n${existingCriteria}`
+    : replacement;
 }
 
 function safeError(error: unknown): string {
@@ -131,6 +194,9 @@ export function createGitLabRestWriterAdapter(
           value: '',
           error: 'GitLab is not configured. Set GITLAB_HOST, GITLAB_PROJECT, and GITLAB_TOKEN.',
         };
+      }
+      if (config.scopeError) {
+        return { written: false, value: '', error: config.scopeError };
       }
 
       const project = encodeURIComponent(config.project);
@@ -160,6 +226,15 @@ export function createGitLabRestWriterAdapter(
 
       try {
         if (isDependencyFinding(finding)) {
+          if (finding.suggestedLinkType === 'blocks' && config.blockingIssueLinks !== true) {
+            return {
+              written: false,
+              value: '',
+              error:
+                'Blocking issue links are disabled for this GitLab tier. ' +
+                'Use relates-to or set blockingIssueLinks=true after confirming Premium/Ultimate support.',
+            };
+          }
           const projectDetails = await request<{ id: number }>('');
           await request(`/issues/${finding.sourceIid}/links`, {
             method: 'POST',
@@ -180,9 +255,16 @@ export function createGitLabRestWriterAdapter(
             body = { description: acceptanceCriteriaDescription(issue.description, valueToWrite) };
             break;
           case 'rewrite_desc':
-            body = { description: valueToWrite };
+            body = { description: ambiguityRewriteDescription(issue.description, valueToWrite) };
             break;
           case 'state_transition': {
+            if (!config.workflowStates.some((state) => state.toLowerCase() === valueToWrite.toLowerCase())) {
+              return {
+                written: false,
+                value: '',
+                error: `Unknown workflow state: ${valueToWrite}`,
+              };
+            }
             const workflowNames = new Set(config.workflowStates.map((state) => state.toLowerCase()));
             const labels = issue.labels.filter((label) => !workflowNames.has(label.toLowerCase()));
             labels.push(valueToWrite);
