@@ -1,0 +1,75 @@
+# Demo Narrative
+
+**Task 36.** Full internal walkthrough for rehearsal (under 15 minutes). The 90-second
+video cut-down is called out separately at the end; see Task 37 (`docs/demo/script.md`)
+for the exact prompts and lines.
+
+## Story arc
+
+The Weather Dashboard project has just moved into GitLab. Nobody has touched its backlog
+yet: 12 issues exist, seeded the way real backlogs actually look after a sprint or two of
+normal pressure, not a curated demo set. Some are missing acceptance criteria. One is
+flagged "Fix the thing on the settings page" and says nothing about what "the thing" is.
+Two pairs of issues describe the same work from different angles with no link between
+them. One issue has a merge request sitting against it that nobody's noticed.
+
+That's the starting point: a backlog that looks fine at a glance and isn't.
+
+**Beat 1: Onboarding.** The developer opens Bob, switches to the `🔧 SDLC Harness` mode,
+and says "govern my backlog." Bob doesn't recognize the project yet, so it asks four
+questions: which GitLab project, what work item types the team uses, what the workflow
+states are, and what the valid transitions between them look like. This takes under a
+minute and happens once. Bob writes the answers to `.sdlc-harness.json` and never asks
+again.
+
+**Beat 2: The audit.** With onboarding done, the developer runs Audit. Bob calls all four
+P0 agents against the 12 seeded issues and comes back with a compiled report: issues 1, 3,
+5, 8, and 11 are missing acceptance criteria; issues 2, 6, and 10 have vague language Bob
+can point to specific phrases in; issues 3↔4, 7↔8, and 11↔12 look like they're describing
+the same work without a link between them; issue 5 has a merged MR referencing it but is
+still sitting in Open. Nothing gets written yet. This is a report, not an action.
+
+**Beat 3: Working the findings.** The developer goes issue by issue. On issue #2 ("Fix
+the thing on the settings page"), the Ambiguity agent has flagged "the thing" and "fix it"
+as phrases nothing could be tested against, and proposes a rewrite grounded in whatever
+concrete detail the issue actually contains. The developer reads it, tweaks a clause, and
+accepts, and Bob writes the edited description back to GitLab and logs the decision. Now
+that the description says something specific, the AC agent's earlier finding for the same
+issue is worth a second look: since it's a Task, Bob drafts two or three Given-When-Then
+criteria in the team's format and asks a direct question about the one thing the issue
+still doesn't say. The developer answers inline, accepts, and it's written.
+
+On #3/#4 and #7/#8, the Dependency agent's proposed links are presented as
+recommendations only, since GitLab's API has no native link endpoint yet, so these stay
+manual for now and the developer notes them for the sprint board. On #5, the
+State-transition agent proposes moving it to In Review because the merged MR referencing
+it hasn't been reflected in the issue's state; the developer accepts and the label
+updates.
+
+**Beat 4: What changed.** The developer asks "how are we doing?" Bob prints the
+acceptance-rate summary from telemetry: how many suggestions were accepted as-is, how many
+edited, how many rejected, since the file is append-only across the whole session. That
+number is the whole pitch: not "here's a feature," but "here's evidence the team is
+already trusting most of what it sees."
+
+## What the 90-second cut shows
+
+Full audits and dependency recommendations are good rehearsal material but don't fit in 90
+seconds. The cut isolates Beat 3's issue #2 walkthrough end to end, since it's the one
+place a single issue shows two agents working in sequence with a real accept/edit decision
+each:
+
+1. Open already onboarded (no onboarding conversation on screen; that context is assumed
+   and stated once in narration).
+2. Ambiguity agent flags "the thing"/"fix it" on issue #2, proposes a rewrite, developer
+   edits and accepts.
+3. AC agent drafts Given-When-Then criteria for the same issue against its now-specific
+   description, developer accepts.
+4. Close on the telemetry acceptance-rate summary.
+
+Narrated from the Developer persona (`docs/onboarding/personas.md`): this is a day-to-day
+workflow moment, not a lead's oversight review, and the AC+AM sequence on one issue reads
+naturally from that angle. Dependency and state-transition findings are mentioned in
+narration as "the other two agents catch relationship problems the same way" without
+being shown, so the story stays anchored to one issue instead of splitting attention
+across four.
