@@ -20,7 +20,7 @@ the governance work.
 | `gitlab-local/` | Docker stack (GitLab CE + nginx demo site) and all the scripts to start, seed, and reset it. |
 | `weather-app/` | The demo artefact under governance — plain HTML/CSS/JS, no build step. |
 | `bob-kit/` | The Bob skill, MCP server, and config templates that implement sdlc-harness. Templates only; see "Installing the Bob skill" below. |
-| `docs/` | Project documentation as self-contained HTML (`docs/index.html` is the entry point), plus implementation plans under `docs/superpowers/`. |
+| `docs/` | Project documentation as self-contained HTML (`docs/index.html` is the entry point). Implementation plans lived under `docs/superpowers/plans/` during active development but are deleted once their task merges, so that path is normally empty/absent. |
 | `bob-sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
 
 ## Running the demo

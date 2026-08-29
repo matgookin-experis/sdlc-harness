@@ -249,9 +249,9 @@ Approval rate:   100%    (accepted + edited) / total</code></pre>
   <pre><code>suggest links</code></pre>
   <p><strong>Expected Bob response:</strong> a <code>DependencyFinding</code> for 3↔4
   and 7↔8, each with a <code>relates-to</code> or <code>blocks</code> suggestion and a
-  confidence score, presented as a recommendation only (<code>SKILL.md</code>:
-  "DependencyFinding objects are always report-only," no native GitLab links API
-  yet).</p>
+  confidence score. Applying creates the actual GitLab issue link (<code>blocks</code> or
+  <code>relates_to</code>) via the issue-links API — this is a real write, the same as
+  the other agents' findings, not a recommendation-only report.</p>
   <p><strong>Prompt:</strong></p>
   <pre><code>check transitions</code></pre>
   <p><strong>Expected Bob response:</strong> a finding for issue #5, proposing a move to

@@ -173,8 +173,10 @@ export async function applyFinding(
       writeError = writeResult.error;
     }
   } else {
-    // Non-writable findings (advisory / report-only / dependency): no write is
-    // attempted, so the user's intent is the outcome directly.
+    // Non-writable findings (advisory / report-only, i.e. missing_coverage): no write
+    // is attempted, so the user's intent is the outcome directly. Dependency findings
+    // are excluded here — isWritable() is true for them, they always go through the
+    // write branch above.
     outcome = userIntent;
   }
 
