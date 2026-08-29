@@ -36,7 +36,10 @@ wait_for() {
   echo "Waiting for $name ($url)..."
   while true; do
     local code
-    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null || echo "000")
+    # curl already prints 000 on failure via %{http_code}; the old `|| echo "000"`
+    # appended a second one, which is where "HTTP 000000" came from.
+    code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)
+    [ -z "$code" ] && code="000"
     if [ "$code" = "200" ] || [ "$code" = "302" ]; then
       pass "$name returned HTTP $code"
       return 0

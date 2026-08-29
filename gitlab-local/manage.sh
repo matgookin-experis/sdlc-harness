@@ -46,17 +46,22 @@ case "${1:-}" in
     docker compose down -v
     echo "Starting fresh..."
     docker compose up -d
-    echo "Waiting for GitLab to be healthy..."
+    # Poll the sign-in page, not the container healthcheck. Docker reports
+    # "healthy" as soon as the container's own check passes, which happens well
+    # before Rails can answer an API call — seeding against that gap is how you
+    # end up with a running GitLab and no group, project or issues.
+    echo "Waiting for GitLab to answer HTTP..."
     for i in $(seq 1 40); do
-      status=$(docker inspect --format='{{.State.Health.Status}}' gitlab 2>/dev/null || echo "")
-      if [ "$status" = "healthy" ]; then
-        echo "GitLab is healthy."
+      status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+        "http://localhost:8080/users/sign_in" 2>/dev/null || echo "000")
+      if [ "$status" = "200" ]; then
+        echo "GitLab is serving."
         break
       fi
-      echo "  [$i/40] health=$status — retrying in 15s..."
+      echo "  [$i/40] HTTP $status — retrying in 15s..."
       sleep 15
       if [ "$i" -eq 40 ]; then
-        echo "ERROR: GitLab did not become healthy in time."
+        echo "ERROR: GitLab did not start serving within 10 minutes."
         exit 1
       fi
     done
