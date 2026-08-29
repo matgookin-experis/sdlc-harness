@@ -278,6 +278,7 @@ function prepareUnmergeMcpJson(bobDir = DEFAULT_BOB_DIR) {
     return null;
   }
 
+  // eslint-disable-next-line no-unused-vars -- destructured only to omit the key from `rest`
   const { 'sdlc-harness': _removed, ...rest } = servers;
   const merged = { ...existing, [key]: rest };
 
