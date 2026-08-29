@@ -10,6 +10,7 @@
     "dev": "tsc --watch",
     "smoke": "node dist/smoke.js && node merge-bob-config.test.mjs",
     "test:config": "node merge-bob-config.test.mjs",
+    "test:templates": "node dist/tools/work-item-format.test.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src *.mjs"
   },
