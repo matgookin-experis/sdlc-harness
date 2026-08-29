@@ -24,6 +24,7 @@
  */
 
 import { GitLabClient, GitLabApiError } from "./gitlab-client.js";
+import { mergeEnvFile } from "./env.js";
 import { gitlabIssueReaderTool } from "./tools/gitlab-issue-reader.js";
 import { gitlabIssueWriterTool } from "./tools/gitlab-issue-writer.js";
 import { gitlabMrReaderWriterTool } from "./tools/gitlab-mr-reader-writer.js";
@@ -1025,6 +1026,14 @@ async function testLive(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // Best-effort merge of bob-kit/mcp-server/.env into process.env so
+  // SDLC_SMOKE_LIVE and the GitLab credentials can come from .env alone —
+  // matches what the onboarding runbook already tells users to expect.
+  // Never overrides values already set in the shell. Missing/absent values
+  // are fine here; testLive() below already prints a friendly skip message
+  // when GitLab credentials aren't present.
+  mergeEnvFile();
+
   process.stdout.write("sdlc-harness MCP server — smoke test\n");
   process.stdout.write("======================================\n");
 

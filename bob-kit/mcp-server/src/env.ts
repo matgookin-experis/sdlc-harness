@@ -80,17 +80,17 @@ function parseDotenvFile(filePath: string): Record<string, string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Load and validate configuration.
+ * Merge variables from the resolved .env file into process.env, without
+ * overriding any variable already set (existing values always win).
+ * Silently does nothing if the file is absent — this is a best-effort
+ * merge, not validation.
  *
- * 1. Determines the env-file path (SDLC_ENV_FILE env var → default ".env").
- * 2. Reads the file and merges into process.env — existing vars win.
- * 3. Validates required vars are present and returns a typed Config object.
- *
- * Throws if any required variable is missing.
- * Never logs values — only variable names.
+ * This is the building block loadConfig() uses internally. It is exported
+ * separately so callers that want .env values picked up but must NOT treat
+ * missing variables as fatal (e.g. the smoke test's optional live-GitLab
+ * check) can call it directly instead of loadConfig(), which throws.
  */
-export function loadConfig(): Config {
-  // Determine env-file location
+export function mergeEnvFile(): void {
   const envFilePath = resolve(
     process.env["SDLC_ENV_FILE"] ?? ".env"
   );
@@ -104,6 +104,19 @@ export function loadConfig(): Config {
       process.env[key] = value;
     }
   }
+}
+
+/**
+ * Load and validate configuration.
+ *
+ * 1. Merges the resolved .env file into process.env — existing vars win.
+ * 2. Validates required vars are present and returns a typed Config object.
+ *
+ * Throws if any required variable is missing.
+ * Never logs values — only variable names.
+ */
+export function loadConfig(): Config {
+  mergeEnvFile();
 
   // Validate required variables
   const required = [
