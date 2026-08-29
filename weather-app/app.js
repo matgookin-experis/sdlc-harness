@@ -59,10 +59,13 @@ function getMockWeather(city) {
   const condition = WEATHER_CONDITIONS[seed % WEATHER_CONDITIONS.length];
 
   // Humidity: 20 % – 95 %
-  const humidity = (20 + ((seed >> 4) % 76)) + '%';
+  // NOTE: >>> not >>. The seed is an unsigned 32-bit value, but `>>` coerces
+  // to signed first, so any seed >= 2^31 went negative and produced
+  // impossible readings (e.g. London: -3 % humidity, -22 mph wind).
+  const humidity = (20 + ((seed >>> 4) % 76)) + '%';
 
   // Wind speed: 0 – 40 mph
-  const wind = ((seed >> 8) % 41) + ' mph';
+  const wind = ((seed >>> 8) % 41) + ' mph';
 
   // Current timestamp
   const now = new Date();

@@ -23,6 +23,7 @@ Mark each item **✅ Pass**, **❌ Fail**, or **⚠ N/A** when testing.
 |---|---|---|---|
 | 2.1 | Type `London` into the city input and click **Search** | Weather card updates to show "London" with deterministic mock data | |
 | 2.2 | Search for `London` a second time | Identical temperature, condition, humidity, and wind speed as the first search (deterministic) | |
+| 2.2a | Search `London`, `Berlin`, `Sydney`, `Mumbai` and `Toronto` in turn | Every reading is physically possible: humidity between 20% and 95%, wind speed between 0 and 40 mph, temperature between 20°F and 100°F. No negative values. | |
 | 2.3 | Search for a different city, e.g. `Tokyo` | Card updates to show "Tokyo" with different values from "London" | |
 | 2.4 | Search for a multi-word city, e.g. `Los Angeles` | Card displays "Los Angeles" in title case | |
 | 2.5 | Search for a city name with mixed case, e.g. `pARIS` | Card displays "Paris" (title-cased) | |
