@@ -31,6 +31,9 @@ cd gitlab-local && docker compose up -d
 # Seed / reset demo data (idempotent — safe to re-run)
 ./gitlab-local/manage.sh seed
 
+# Rotate the local MCP/live-test token without displaying it
+./gitlab-local/manage.sh refresh-token
+
 # Full wipe and reseed (clean demo state)
 cd gitlab-local && docker compose down -v && docker compose up -d && ./manage.sh seed
 

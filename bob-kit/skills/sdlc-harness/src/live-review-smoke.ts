@@ -60,18 +60,26 @@ async function main(): Promise<void> {
       agent: 'AC', issueIid: first.iid, action: 'draft_ac',
       suggestedValue: '**Given** a changed preference\n**When** the page reloads\n**Then** the saved value remains selected',
     }, { editedValue: null });
-    if (!acResult.gitlabWriteCalled) throw new Error('AC write did not reach GitLab');
+    if (!acResult.gitlabWriteCalled) {
+      throw new Error(`AC write did not reach GitLab: ${acResult.error ?? 'unknown error'}`);
+    }
 
-    const rewrite = 'The preferences API returns HTTP 500 when the notification setting is saved.';
+    // Apply the ambiguity rewrite to the SAME issue after AC. This proves the
+    // common "apply both" review path preserves the criteria already written.
+    const rewrite = 'The settings save handler returns HTTP 500 when the notification setting is saved.';
     const amResult = await applyFinding({
-      agent: 'AM', issueIid: second.iid, action: 'rewrite_desc', suggestedValue: rewrite,
+      agent: 'AM', issueIid: first.iid, action: 'rewrite_desc', suggestedValue: rewrite,
     }, { editedValue: null });
-    if (!amResult.gitlabWriteCalled) throw new Error('Ambiguity rewrite did not reach GitLab');
+    if (!amResult.gitlabWriteCalled) {
+      throw new Error(`Ambiguity rewrite did not reach GitLab: ${amResult.error ?? 'unknown error'}`);
+    }
 
     const transitionResult = await applyFinding({
       agent: 'ST', issueIid: first.iid, action: 'state_transition', suggestedValue: 'In Review',
     }, { editedValue: null });
-    if (!transitionResult.gitlabWriteCalled) throw new Error('State transition did not reach GitLab');
+    if (!transitionResult.gitlabWriteCalled) {
+      throw new Error(`State transition did not reach GitLab: ${transitionResult.error ?? 'unknown error'}`);
+    }
 
     const dependency: DependencyFinding = {
       agent: 'DEP', sourceIid: first.iid, targetIid: second.iid,
@@ -83,13 +91,12 @@ async function main(): Promise<void> {
     }
 
     const firstAfter = await request<LiveIssue>(`/issues/${first.iid}`);
-    const secondAfter = await request<LiveIssue>(`/issues/${second.iid}`);
     const links = await request<Array<{ iid: number; link_type: string }>>(`/issues/${first.iid}/links`);
     const telemetry = await readTelemetry();
 
     if (!firstAfter.description?.includes('## Acceptance Criteria')) throw new Error('AC was not persisted');
+    if (!firstAfter.description?.includes(rewrite)) throw new Error('Description rewrite was not persisted');
     if (!firstAfter.labels.includes('In Review')) throw new Error('State label was not persisted');
-    if (secondAfter.description !== rewrite) throw new Error('Description rewrite was not persisted');
     if (!links.some((link) => link.iid === second.iid)) throw new Error('Dependency link was not persisted');
     if (telemetry.length !== 4 || telemetry.some((entry) => entry.outcome !== 'accepted')) {
       throw new Error('Telemetry did not record all four accepted writes');

@@ -44,6 +44,9 @@ docker compose up -d
 
 # 5. Seed intentionally-incomplete demo issues for agent demo
 ./manage.sh seed-issues
+
+# 6. Create/refresh the API token used by the MCP server and live tests
+./manage.sh refresh-token
 ```
 
 Then open **http://localhost:8080** (GitLab) and **http://localhost:8081** (demo site).
@@ -107,6 +110,7 @@ SDLC Harness demo artefact (sourced from the `dev` branch of the sdlc-harness re
 | `./manage.sh restart`         | Restart the stack                                     |
 | `./manage.sh seed`            | Seed demo users, group, and project                   |
 | `./manage.sh seed-issues`     | Seed 12 intentionally-incomplete issues for agent demo|
+| `./manage.sh refresh-token`   | Rotate and verify the gitignored MCP/API token         |
 | `./manage.sh reset [-y]`      | Full wipe + fresh boot + reseed in one command (see Full Reset below) |
 | `./manage.sh logs`            | Tail container logs                                   |
 | `./manage.sh status`          | Show container health                                 |
@@ -154,6 +158,39 @@ docker compose up -d
 The agents, the MCP tools and every seeded issue work without the demo site — it
 only serves the weather app for the demo video. `smoke.sh` treats it as optional
 and still exits 0 when only GitLab is healthy.
+
+### Seeding hangs at "Creating API token..."
+
+Both seed scripts mint their token by booting GitLab's Rails console inside the
+container (`gitlab-rails runner`). That boot loads the whole Rails app and is by
+far the heaviest step — on a cold container, or one short on RAM, it can take
+many minutes or appear to hang outright.
+
+Skip it by supplying your own token. In GitLab (signed in as `root`) go to
+**User settings → Access tokens**, create one with the `api` scope, then:
+
+```bash
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+./manage.sh seed
+./manage.sh seed-issues
+```
+
+Both scripts use it directly and never start the Rails console. This is the
+faster and more reliable path on any machine, and worth doing before a demo.
+
+For the local demo, the supported automated path is:
+
+```bash
+./manage.sh refresh-token
+```
+
+It rotates a 30-day API token for the `demo` user, stores it in the repository
+root `.env` with mode `600`, verifies authentication, and never prints the token.
+
+If seeding is genuinely slow rather than stuck, check Docker Desktop's memory
+allocation — GitLab CE wants 4 GB and will thrash below that.
+
+---
 
 ### The password in `.env` does not work
 

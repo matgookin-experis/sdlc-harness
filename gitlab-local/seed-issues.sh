@@ -68,6 +68,15 @@ done
 # all of that.
 echo ""
 echo "Creating API token..."
+if [ -n "${GITLAB_TOKEN:-}" ]; then
+  # Booting the Rails console costs a lot of memory and several minutes on a cold
+  # or resource-starved container, and it is the step most likely to hang. A token
+  # supplied by the caller skips it entirely. Create one in the GitLab UI under
+  # User settings -> Access tokens, with the `api` scope.
+  TOKEN="$GITLAB_TOKEN"
+  echo "Using GITLAB_TOKEN from the environment (skipping Rails console)."
+else
+
 cat > "$TMP_DIR/runner.rb" <<'RUBY'
 begin
   PersonalAccessToken.where(name: 'seed-issues-token', user_id: 1).delete_all
@@ -93,6 +102,7 @@ if [ -z "$TOKEN" ] || [[ "$TOKEN" == ERROR:* ]]; then
   exit 1
 fi
 echo "Token obtained."
+fi
 
 # ── Helper: GitLab API call ───────────────────────────────────────────────────
 api() {

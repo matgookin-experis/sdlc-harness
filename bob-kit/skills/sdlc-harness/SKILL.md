@@ -50,6 +50,8 @@ Ask the user:
 2. What work item types does the team use? (e.g. Story, Bug, Task, Epic)
 3. What are the workflow states? (e.g. Open, In Progress, In Review, Done)
 4. What are the valid state transitions? (e.g. Open → In Progress, In Progress → In Review)
+5. Does the GitLab tier support blocking issue links? Leave `blockingIssueLinks` false for
+   the local GitLab CE demo; enable it only for a confirmed Premium/Ultimate project.
 
 Save answers to `.sdlc-harness.json` in the repo root using the `ProjectConfig` schema
 defined in `bob-kit/skills/sdlc-harness/src/models.ts`.
@@ -203,11 +205,11 @@ and flagging its output created a loop between the two agents.
 removed). Threshold: 0.12 for a finding; 0.25 for high-confidence boost.
 
 **Link type and direction:**
-- `blocks` — only when exactly one side carries dependency language ("depends on",
+- `blocks` — only when `blockingIssueLinks` is true and exactly one side carries dependency language ("depends on",
   "requires", "prerequisite", "blocks"). The side that depends on the other is the
   target; the prerequisite side is the source.
-- `relates-to` — when both or neither sides carry dependency language (direction is
-  ambiguous). The lower IID is always set as `sourceIid` for canonical ordering.
+- `relates-to` — when blocking links are disabled, or when both/neither sides carry
+  dependency language (direction is ambiguous). The lower IID is always the source.
 - Domain-specific heuristics (e.g. matching "/token refresh/") are intentionally
   excluded from `BLOCKS_SIGNALS`; they produce unreliable directions on real backlogs.
 
@@ -300,10 +302,10 @@ Reply with:
 
 | User input | Action | Logged |
 |------------|--------|--------|
-| `apply` | Call `applyFinding(finding, { editedValue: null })` | ✓ `accepted` |
-| `edit <text>` | Call `applyFinding(finding, { editedValue: '<text>' })` | ✓ `edited` |
+| `apply` | Call `sdlc-review-decision` with `apply-agent` or `apply-dependency` | ✓ `accepted` |
+| `edit <text>` | Call `sdlc-review-decision` with `apply-agent` and `edited_value` | ✓ `edited` |
 | `skip` | No-op | ✗ not logged |
-| `reject` | Call `rejectFinding(finding)` | ✓ `rejected` |
+| `reject` | Call `sdlc-review-decision` with `reject-agent` or `reject-dependency` | ✓ `rejected` |
 
 **Only `apply` and `edit` call the GitLab writer adapter.** `skip` and `reject` do not
 modify any GitLab data.
@@ -342,7 +344,8 @@ surface them one at a time in a numbered list before presenting each individuall
   1. [AC]  Draft missing acceptance criteria
   2. [AM]  Rewrite vague description
 
-Review them in order. Apply, edit, skip, or reject each separately.
+Review them in order. When AC and AM are both accepted, apply the AM rewrite first and
+then append AC. The writer also preserves an existing AC section as a safety net.
 ```
 
 After the user handles all findings for an issue, proceed to the next issue.
@@ -350,10 +353,10 @@ After the user handles all findings for an issue, proceed to the next issue.
 ### Writer adapter contract
 
 At runtime, `applyFinding` calls the adapter only for **writable actions**.
-The `defaultWriterAdapter` (in `gitlab-writer-adapter.ts`) deliberately returns
-`written: false` when no real adapter is injected, so telemetry will never record
-`outcome: accepted` for writes that never reached GitLab.  Pass `stubWriterAdapter`
-explicitly in unit tests.
+The `defaultWriterAdapter` (in `gitlab-writer-adapter.ts`) performs real, project-scoped
+GitLab REST writes. It returns `written: false` when credentials are missing, the runtime
+project differs from `.sdlc-harness.json`, or GitLab rejects the operation. Pass
+`stubWriterAdapter` explicitly in isolated unit tests.
 
 Action-specific write semantics (for a real adapter):
 
@@ -365,10 +368,10 @@ Action-specific write semantics (for a real adapter):
 | `missing_coverage` | **Never written** — report only | COV findings are informational |
 | `dependency_link` | Create a GitLab issue link | `create-link`; maps `relates-to` to GitLab's `relates_to` |
 
-The compiled review bridge (`npm run review -- apply <decision.json>`) uses the real
-default adapter and appends telemetry only after GitLab confirms the write. Bob may use
-the MCP writer directly when operating interactively, but it must then append the same
-telemetry event only after the MCP call succeeds.
+The `sdlc-review-decision` MCP tool is the interactive review path. It delegates to the
+compiled review runtime, so the GitLab write and telemetry outcome stay together. Do not
+use `gitlab-issue-writer` directly for an agent review decision. The CLI bridge
+(`npm run review -- apply <decision.json>`) provides the same behaviour for terminal use.
 
 ---
 
@@ -452,6 +455,7 @@ Use them when calling GitLab on the user's behalf:
 |------|---------|
 | `gitlab-issue-reader` | Read issues, labels, and current state |
 | `gitlab-issue-writer` | Create / update issues, add notes, change state |
+| `sdlc-review-decision` | Apply/reject agent findings and report telemetry metrics |
 | `gitlab-mr-reader-writer` | Read MRs (state-transition signal), write MR notes |
 | `work-item-format` | Canonical formatting standard for titles, descriptions, AC |
 
@@ -480,5 +484,5 @@ bob-kit/skills/sdlc-harness/
 │       ├── telemetry.ts                  — Task 26: JSONL append, acceptance-rate
 │       └── gitlab-writer-adapter.ts      — adapter boundary for MCP write calls
 └── tests/
-    └── skill.test.ts                     — 60 tests covering Tasks 18–26
+    └── skill.test.ts                     — 76 tests covering Tasks 18–26
 ```
