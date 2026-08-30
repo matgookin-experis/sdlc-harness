@@ -124,6 +124,13 @@ sdlc-harness-telemetry.jsonl
 # sdlc-harness onboarding output (committing would make fresh clones skip Phase 1)
 .sdlc-harness.json
 
+# sdlc-harness onboarding scratch input (regenerated each onboarding run)
+onboarding-input.json
+
+# sdlc-harness apply/reject decision payloads (scratch files fed to the CLI
+# during a review session — regenerated from each audit, must not be committed)
+decision-*.json
+
 # seed-issues.sh scratch dir — removed by its EXIT trap, but survives if the
 # script is interrupted, and then shows up as an untracked file.
 gitlab-local/.seed-issues-tmp/
