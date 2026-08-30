@@ -1,17 +1,52 @@
-# sdlc-harness
+<table>
+  <tr>
+    <td width="120" align="center">
+      <img src="docs/assets/team-experis-logo.png" alt="Experis logo" width="92">
+    </td>
+    <td>
+      <h1>SDLC Harness</h1>
+      <strong>Proactive, human-in-the-loop backlog governance powered by IBM Bob</strong><br>
+      Built by <strong>Team Experis</strong> for the IBM Bobathon.
+    </td>
+  </tr>
+</table>
 
-IBM Hackathon project. sdlc-harness is a Bob skill that governs work item quality on a
-GitLab backlog throughout the SDLC: it drafts missing acceptance criteria, flags vague
-descriptions, suggests dependency links, and proposes state transitions, all surfaced to
-a developer for review inside Bob before anything gets written back to GitLab. See
-[Problem Statement & Solution](docs/problem-statement.html) for the full problem/solution
-writeup and [How Bob Was Used to Build This](docs/bob-usage.html) for how Bob was used to
-build this project. Documentation lives under `docs/` as self-contained HTML; start at
-[docs/index.html](docs/index.html).
+<p align="center">
+  <img alt="IBM Bob" src="https://img.shields.io/badge/IBM-Bob-0f62fe?style=flat-square">
+  <img alt="Team Experis" src="https://img.shields.io/badge/Team-Experis-5b4bff?style=flat-square">
+  <img alt="GitLab CE" src="https://img.shields.io/badge/GitLab-CE-fc6d26?style=flat-square">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.5-3178c6?style=flat-square">
+  <img alt="Docker" src="https://img.shields.io/badge/Docker-Compose-2496ed?style=flat-square">
+</p>
 
-The repo is self-contained: a Docker Compose stack runs a real GitLab CE instance plus a
-small demo web app ("Weather Dashboard") to govern, and a Bob skill/MCP server pair does
-the governance work.
+## Overview
+
+**SDLC Harness** is an IBM Bob skill that improves the quality and traceability of GitLab
+work items before gaps become delivery problems. It reviews the backlog, identifies
+missing or unclear information, and brings every proposed change back to the developer
+for approval inside Bob before anything is written to GitLab.
+
+The project is self-contained: Docker Compose runs GitLab CE and a Weather Dashboard demo
+application, while the Bob skill and MCP server provide the governance workflow.
+
+```text
+GitLab backlog → IBM Bob → SDLC governance agents → Human review → Safe write-back + telemetry
+```
+
+## What it does
+
+| Capability | Value |
+|---|---|
+| Acceptance criteria | Drafts specific, testable Given-When-Then criteria for incomplete work items. |
+| Ambiguity detection | Finds vague language and proposes concrete, reviewable wording. |
+| Dependency suggestions | Identifies related or blocking issues from backlog context. |
+| State transitions | Detects stale workflow states from merge-request activity. |
+| Test coverage linkage | Flags work items without a configured test reference. |
+| Human review and telemetry | Supports apply, edit, skip, or reject decisions and measures suggestion outcomes. |
+
+See the [Problem Statement & Solution](docs/problem-statement.html),
+[How Bob Was Used to Build This](docs/bob-usage.html), and the full
+[project documentation](docs/index.html).
 
 ## Repository layout
 
@@ -94,6 +129,17 @@ the governance work.
 - Return the whole demo to a freshly cloned state with
   `./gitlab-local/manage.sh uninstall`; this also deletes Docker volumes, local `.env`
   files, onboarding state, and telemetry, so it prompts before proceeding.
+
+## Team Experis
+
+<p align="center">
+  <img src="docs/assets/team-experis-logo.png" alt="Experis logo" width="90">
+</p>
+
+SDLC Harness was created by **Team Experis** for the IBM Bobathon. Our goal is simple:
+use agentic AI to remove SDLC friction while keeping developers in control.
+
+<p align="center"><strong>Automate. Integrate. Deliver.</strong></p>
 
 ## Security
 
