@@ -135,3 +135,6 @@ decision-*.json
 # script is interrupted, and then shows up as an untracked file.
 gitlab-local/.seed-issues-tmp/
 gitlab-local/.token-tmp/
+
+# demo docs (excluded from version control)
+docs/demo/
