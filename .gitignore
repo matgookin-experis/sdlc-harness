@@ -138,3 +138,6 @@ gitlab-local/.token-tmp/
 
 # demo docs (excluded from version control)
 docs/demo/
+
+# living task tracker (excluded from version control)
+to-do.md

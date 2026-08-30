@@ -29,12 +29,12 @@
   rather than reconstructed afterward.</p>
 
   <h2>Planning and problem framing</h2>
-  <p>The to-do list this project was built against wasn't written by hand and then handed
+  <p>The task list this project was built against wasn't written by hand and then handed
   to Bob to execute; Bob wrote the first draft of it. The team's prompt
   (<a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a>)
   pointed Bob at the already-drafted Problem Statement and asked it to break the project
   into an MVP task list "using the IBM Bob IDE," specifying a required numbering and
-  priority format, which is the structure <code>to-do.md</code> still follows.</p>
+  priority format.</p>
 
   <p>The Problem Statement itself went through a similar loop the other direction: the
   team wrote a first pass, then handed it to Bob along with the exact judging constraints
@@ -47,7 +47,7 @@
   session explicitly asked Bob to troubleshoot why <code>./manage.sh seed</code> wasn't
   working against <code>gitlab-local/docker-compose.yml</code>
   (<a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a>).
-  Another asked Bob to confirm, against <code>to-do.md</code>, whether Section 1
+  Another asked Bob to confirm, against the project task list, whether Section 1
   (Infrastructure) was actually complete before moving on
   (<a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a>)
   rather than assuming it from memory.</p>
@@ -87,7 +87,7 @@
   (<a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a>),
   16 of 16 sub-tasks completed at a cost of 9.03 Bobcoins. The session summary maps each
   agent to its task number and source file, which is why the repo's module layout matches
-  <code>to-do.md</code> one-for-one rather than approximately.</p>
+  the project task list one-for-one rather than approximately.</p>
 
   <p>The agent design iterated rather than landing correctly on the first pass: a later
   commit (<code>f0032a3 Tasks 20-21: agents produce a draft brief instead of templated
@@ -142,10 +142,10 @@
     </thead>
     <tbody>
       <tr><td><a href="../bob-sessions/teamexperis_create_gitlab_container.png"><code>teamexperis_create_gitlab_container.png</code></a></td><td>Initial repo clone task</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a></td><td><code>to-do.md</code> drafted by Bob from the Problem Statement</td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a></td><td>Project task list drafted by Bob from the Problem Statement</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a></td><td>Bob tightening the problem statement against the judging constraints</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a></td><td>Debugging <code>docker-compose.yml</code> / <code>manage.sh seed</code></td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a></td><td>Bob confirming Section 1 completion against <code>to-do.md</code></td></tr>
+      <tr><td><a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a></td><td>Bob confirming Section 1 completion against the project task list</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a></td><td>Branching and planning the skill scaffold (Task 17)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
       <tr><td><a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>

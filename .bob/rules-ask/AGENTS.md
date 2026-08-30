@@ -14,4 +14,3 @@ This file provides guidance to agents when working with code in this repository.
 - **The `demo` GitLab user and `root` admin use separate passwords**
   (`GITLAB_DEMO_PASSWORD` and `GITLAB_ROOT_PASSWORD`). `manage.sh seed` provisions them.
 - **`bob-sessions/` is committed** — this is unusual (most AI session data is gitignored), but it is required for hackathon submission evidence.
-- **`to-do.md`** is the canonical task tracker for this project, not GitHub Issues or any external tracker.

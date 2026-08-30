@@ -8,7 +8,7 @@ This file provides guidance to agents when working with code in this repository.
 - **MCP server is the custom TypeScript package under `bob-kit/mcp-server/`.** It is built
   and registered as a local stdio server by the installer.
 - **The skill scope is hard-locked at onboarding time** via `.sdlc-harness.json`. There is no multi-project mode and no runtime scope expansion — this is a deliberate constraint to prevent cross-project contamination during demo.
-- **P0 / P1 / P2 priorities** are defined in `to-do.md` (Section: Priority Legend) and must be respected. P2 items (generic coding-assistant kit features: `backlog-hygiene`, `work-item-optimizer`, etc.) are explicitly out of scope and must not be built.
+- **P2 items (generic coding-assistant kit features: `backlog-hygiene`, `work-item-optimizer`, etc.) are explicitly out of scope and must not be built.**
 - **Agents must never modify GitLab issues without explicit user approval** (Phase 4 of the skill). Any plan that auto-applies changes violates the human-review requirement.
 - **Suggestion telemetry (Task 26) must be minimal** — flat file or GitLab comment thread only. No database, no dashboard. The only metric the demo needs is an acceptance rate.
 - **Section 2A plumbing is implemented and tested.** Preserve project scoping, explicit
