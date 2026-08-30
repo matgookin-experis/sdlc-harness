@@ -22,6 +22,7 @@ import type {
   UpdateIssueParams,
   CreateMRParams,
   UpdateMRParams,
+  MergeMRParams,
 } from "./types.js";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
@@ -416,6 +417,17 @@ export class GitLabClient {
    */
   async updateMR(iid: number, params: UpdateMRParams): Promise<GitLabMR> {
     const url = this.projectUrl(`/merge_requests/${iid}`);
+    return this.request<GitLabMR>(url, {
+      method: "PUT",
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
+   * Accept (merge) an open merge request.
+   */
+  async mergeMR(iid: number, params: MergeMRParams = {}): Promise<GitLabMR> {
+    const url = this.projectUrl(`/merge_requests/${iid}/merge`);
     return this.request<GitLabMR>(url, {
       method: "PUT",
       body: JSON.stringify(params),

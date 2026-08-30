@@ -109,7 +109,7 @@
     <tbody>
       <tr><td><code>gitlab-issue-reader</code></td><td>Reads issues, labels and comments for the configured project. Every agent starts here.</td></tr>
       <tr><td><code>gitlab-issue-writer</code></td><td>Creates and updates issues, with duplicate detection on title. Only the review interface calls it.</td></tr>
-      <tr><td><code>gitlab-mr-reader-writer</code></td><td>Reads and manages merge requests. This is what gives the state transition agent its activity signal.</td></tr>
+      <tr><td><code>gitlab-mr-reader-writer</code></td><td>Reads and manages merge requests: list, get, create, update, merge (<code>accept-mr</code>), close, and comment. This is what gives the state transition agent its activity signal, and what a direct request like "open a merge request for issue #7" or "merge MR !12" uses — see the <a href="demo/prompt-suite.html">Prompt Suite</a> for the full catalog.</td></tr>
       <tr><td><code>work-item-format</code></td><td>The canonical format standard: title conventions, description structure and Given-When-Then criteria per work item type. Single source of truth, so the agents do not each invent their own.</td></tr>
       <tr><td><code>sdlc-review-decision</code></td><td>Applies or rejects a suggestion and records telemetry in one atomic step, so a decision cannot be written without being logged.</td></tr>
     </tbody>

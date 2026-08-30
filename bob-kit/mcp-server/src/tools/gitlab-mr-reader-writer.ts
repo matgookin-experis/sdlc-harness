@@ -6,6 +6,7 @@
  *  - get-mr     : fetch a single MR by IID
  *  - create-mr  : open a new merge request
  *  - update-mr  : update title, description, labels, or assignee
+ *  - accept-mr  : merge an open MR
  *  - close-mr   : close (abandon) an open MR
  *  - list-notes : list notes/comments on an MR
  *  - add-note   : post a comment on an MR
@@ -64,6 +65,17 @@ const argsSchema = z.discriminatedUnion("action", [
     assignee_id: z.number().int().min(1).optional().describe("Replacement assignee user ID."),
   }),
   z.object({
+    action: z.literal("accept-mr"),
+    iid: z.number().int().min(1).describe("Project-scoped MR IID to merge."),
+    merge_commit_message: z.string().optional().describe(
+      "Custom merge commit message."
+    ),
+    squash: z.boolean().optional().describe("Squash commits on merge."),
+    should_remove_source_branch: z.boolean().optional().describe(
+      "Delete the source branch after merging."
+    ),
+  }),
+  z.object({
     action: z.literal("close-mr"),
     iid: z.number().int().min(1).describe("Project-scoped MR IID to close."),
   }),
@@ -88,6 +100,7 @@ export const gitlabMrReaderWriterTool: ToolDefinition<typeof argsSchema> = {
     "action='get-mr' fetches a single MR by IID (check .state for 'merged' to trigger state transitions). " +
     "action='create-mr' opens a new MR. " +
     "action='update-mr' patches title, description, or labels. " +
+    "action='accept-mr' merges an open MR. " +
     "action='close-mr' abandons an open MR. " +
     "action='list-notes' / 'add-note' read and write MR comments.",
   argsSchema,
@@ -126,6 +139,13 @@ export const gitlabMrReaderWriterTool: ToolDefinition<typeof argsSchema> = {
           description: args.description,
           labels: args.labels,
           assignee_id: args.assignee_id,
+        });
+
+      case "accept-mr":
+        return gitlab.mergeMR(args.iid, {
+          merge_commit_message: args.merge_commit_message,
+          squash: args.squash,
+          should_remove_source_branch: args.should_remove_source_branch,
         });
 
       case "close-mr":

@@ -1115,6 +1115,9 @@ async function testGitLabMrReaderWriter(): Promise<void> {
       return { status: 200, body: { id: 1, body: requestBody["body"] } };
     }
     if (url.includes("/merge_requests/10/notes")) return { status: 200, body: [] };
+    if (url.includes("/merge_requests/10/merge") && init?.method === "PUT") {
+      return { status: 200, body: { ...MOCK_MR, ...requestBody, state: "merged" } };
+    }
     if (url.includes("/merge_requests/10") && init?.method === "PUT") {
       return { status: 200, body: { ...MOCK_MR, ...requestBody } };
     }
@@ -1151,6 +1154,16 @@ async function testGitLabMrReaderWriter(): Promise<void> {
   }, ctx);
   assert(requestBody["title"] === "feat: updated MR", "update-mr sends title");
   assert(requestBody["assignee_id"] === 7, "update-mr sends assignee_id");
+
+  const merged = await gitlabMrReaderWriterTool.execute({
+    action: "accept-mr",
+    iid: 10,
+    squash: true,
+    should_remove_source_branch: true,
+  }, ctx) as { state: string };
+  assert(merged.state === "merged", "accept-mr merges the MR");
+  assert(requestBody["squash"] === true, "accept-mr sends squash");
+  assert(requestBody["should_remove_source_branch"] === true, "accept-mr sends should_remove_source_branch");
 
   await gitlabMrReaderWriterTool.execute({ action: "close-mr", iid: 10 }, ctx);
   assert(requestBody["state_event"] === "close", "close-mr sends state_event=close");

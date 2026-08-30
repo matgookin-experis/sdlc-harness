@@ -160,3 +160,9 @@ export interface UpdateMRParams {
   labels?: string;
   assignee_id?: number;
 }
+
+export interface MergeMRParams {
+  merge_commit_message?: string;
+  squash?: boolean;
+  should_remove_source_branch?: boolean;
+}
