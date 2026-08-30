@@ -80,6 +80,27 @@ repo root:
 node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" onboard <onboarding-input.json>
 ```
 
+Example `onboarding-input.json` — match these field names and shapes exactly
+(`workflowStates`, not `states`; `transitionRules` as a map of state → array of
+reachable states, not an array of `{ from, to }` edges):
+
+```json
+{
+  "projectUrl": "http://localhost:8080/sdlc-harness/weather-dashboard",
+  "workItemTypes": ["Epic", "Feature", "User Story", "Bug", "Task"],
+  "workflowStates": ["Open", "In Progress", "In Review", "Done"],
+  "transitionRules": {
+    "Open": ["In Progress"],
+    "In Progress": ["In Review"],
+    "In Review": ["Done", "In Progress"]
+  },
+  "blockingIssueLinks": false
+}
+```
+
+Run `node ".../cli.js" onboard --help` at any time for this same example plus the
+current CLI usage line.
+
 The command validates and atomically writes `.sdlc-harness.json`. It always persists
 `"provider": "gitlab"`, validates `projectUrl` with `URL`, rejects credentials, query
 parameters, and fragments, and requires a namespace/project path. Names and transition

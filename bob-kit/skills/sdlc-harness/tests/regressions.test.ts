@@ -129,7 +129,9 @@ describe('configuration validation and persistence regressions', () => {
       expect(persistProjectConfig(PROJECT_CONFIG, configPath)).toBe(configPath);
       const persisted = JSON.parse(fs.readFileSync(configPath, 'utf8')) as ProjectConfig;
       expect(persisted).toEqual(PROJECT_CONFIG);
-      expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(configPath).mode & 0o777).toBe(
+        process.platform === 'win32' ? 0o666 : 0o600,
+      );
       expect(fs.readdirSync(directory)).toEqual(['.sdlc-harness.json']);
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
@@ -160,6 +162,40 @@ describe('configuration validation and persistence regressions', () => {
       if (previousPath === undefined) delete process.env['SDLC_PROJECT_CONFIG'];
       if (previousPath !== undefined) process.env['SDLC_PROJECT_CONFIG'] = previousPath;
       fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test('CLI prints top-level usage for --help, -h, help, and no command', async () => {
+    for (const args of [[], ['--help'], ['-h'], ['help']]) {
+      const output: string[] = [];
+      const exitCode = await runCli(args, (value) => output.push(value));
+      expect(exitCode).toBe(0);
+      expect(output.join('')).toMatch(/Usage: sdlc-harness/);
+    }
+  });
+
+  test('CLI onboard --help prints an onboarding JSON example instead of reading it as a file', async () => {
+    const output: string[] = [];
+    const exitCode = await runCli(['onboard', '--help'], (value) => output.push(value));
+    const printed = output.join('');
+
+    expect(exitCode).toBe(0);
+    expect(printed).toMatch(/Usage: sdlc-harness onboard/);
+    // The example must use the real field names and the adjacency-map shape
+    // for transitionRules, not a from/to edge-array.
+    expect(printed).toMatch(/"workflowStates"/);
+    expect(printed).toMatch(/"transitionRules"/);
+    expect(JSON.parse(/```json\n([\s\S]*?)\n```/.exec(printed)?.[1] ?? '{}')).toMatchObject({
+      transitionRules: expect.any(Object),
+    });
+  });
+
+  test('CLI apply --help and reject --help print usage instead of parsing a decision file', async () => {
+    for (const command of ['apply', 'reject']) {
+      const output: string[] = [];
+      const exitCode = await runCli([command, '--help'], (value) => output.push(value));
+      expect(exitCode).toBe(0);
+      expect(output.join('')).toMatch(new RegExp(`Usage: sdlc-harness ${command}`));
     }
   });
 });

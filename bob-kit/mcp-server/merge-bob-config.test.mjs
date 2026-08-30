@@ -104,22 +104,28 @@ function testFileModes() {
   const permissiveMcp = join(permissiveDir, 'settings', 'mcp.json');
 
   try {
+    // Windows/NTFS has no POSIX permission bits — chmod only toggles the DOS
+    // read-only attribute, which stat reports back as 0o444 (read-only) or
+    // 0o666 (writable), never the exact requested bits.
+    const restrictedMode = process.platform === 'win32' ? 0o444 : 0o400;
+    const writableMode = process.platform === 'win32' ? 0o666 : 0o600;
+
     writeFileSync(restrictiveMcp, '{}');
     writeFileSync(restrictiveModes, 'customModes: []\n');
     chmodSync(restrictiveMcp, 0o400);
     chmodSync(restrictiveModes, 0o400);
     mergeConfig(projectRoot, restrictiveDir);
-    assert.equal(fileMode(restrictiveMcp), 0o400);
-    assert.equal(fileMode(restrictiveModes), 0o400);
+    assert.equal(fileMode(restrictiveMcp), restrictedMode);
+    assert.equal(fileMode(restrictiveModes), restrictedMode);
 
     mergeConfig(projectRoot, freshDir);
-    assert.equal(fileMode(freshMcp), 0o600);
-    assert.equal(fileMode(freshModes), 0o600);
+    assert.equal(fileMode(freshMcp), writableMode);
+    assert.equal(fileMode(freshModes), writableMode);
 
     writeFileSync(permissiveMcp, '{}');
     chmodSync(permissiveMcp, 0o644);
     mergeMcpJson(projectRoot, permissiveDir);
-    assert.equal(fileMode(permissiveMcp), 0o600);
+    assert.equal(fileMode(permissiveMcp), writableMode);
   } finally {
     rmSync(dirname(restrictiveDir), { recursive: true, force: true });
     rmSync(dirname(freshDir), { recursive: true, force: true });

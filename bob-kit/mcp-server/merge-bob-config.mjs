@@ -46,6 +46,13 @@ function atomicWrite(path, content) {
   try {
     writeFileSync(tempPath, content, { encoding: 'utf-8', mode: 0o600 });
     chmodSync(tempPath, mode);
+    if (process.platform === 'win32' && existsSync(path)) {
+      // Windows maps a missing owner-write bit to the DOS read-only
+      // attribute, and refuses to rename over a read-only destination.
+      // Clear it so the atomic replace can proceed; the temp file's own
+      // mode (set above) becomes the new file's mode once renamed.
+      chmodSync(path, 0o600);
+    }
     renameSync(tempPath, path);
   } catch (error) {
     if (existsSync(tempPath)) {
