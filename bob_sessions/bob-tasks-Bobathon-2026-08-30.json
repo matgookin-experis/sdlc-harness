@@ -1127,7 +1127,7 @@
           "role": "tool",
           "data": {
             "role": "tool",
-            "content": "sdlc-harness/.env:GITLAB_HOST=https://gitlab.example.com\nsdlc-harness/.env:GITLAB_PROJECT=sdlc-harness/weather-dashboard\nsdlc-harness/.env:GITLAB_TOKEN=[REDACTED_GITLAB_PAT].01.0w119c3zj",
+            "content": "sdlc-harness/.env:GITLAB_HOST=https://gitlab.example.com\nsdlc-harness/.env:GITLAB_PROJECT=sdlc-harness/weather-dashboard\nsdlc-harness/.env:GITLAB_TOKEN=[REDACTED_GITLAB_PAT]",
             "toolUsage": {
               "signature": {
                 "id": "tooluse_coJqtsTbDk7OnHTSTSvvpn",
@@ -19928,8 +19928,8 @@
                 "curl -sf -X POST \\\n  -H \"PRIVATE-TOKEN: $KNOWN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'",
                 "python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('token','ERROR: '+str(d)))\"",
                 "curl -sf \"http://localhost:8080/oauth/token\" \\\n  -d \"grant_type=password&username=root&password=[REDACTED_PASSWORD]\"",
-                "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'",
-                "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'",
+                "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'",
+                "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'",
                 "docker exec gitlab cat /tmp/seed_token.txt",
                 "true",
                 "curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\"",
@@ -26994,7 +26994,7 @@
           "role": "tool",
           "data": {
             "role": "tool",
-            "content": "#<User id:1 @root>\n[REDACTED_GITLAB_PAT].01.0w13pskld",
+            "content": "#<User id:1 @root>\n[REDACTED_GITLAB_PAT]",
             "toolUsage": {
               "signature": {
                 "id": "tooluse_PM8QMyOr5HUE1AiopvPTvu",
@@ -27392,7 +27392,7 @@
                 "id": "tooluse_fynf6zDXrxB9bFyfwgTlMg",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "# Use the already-known working token from earlier to create a fresh named one\nKNOWN_TOKEN=\"[REDACTED_GITLAB_PAT].01.0w13pskld\"\ncurl -sf -X POST \\\n  -H \"PRIVATE-TOKEN: $KNOWN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1 | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('token','ERROR: '+str(d)))\""
+                  "command": "# Use the already-known working token from earlier to create a fresh named one\nKNOWN_TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -sf -X POST \\\n  -H \"PRIVATE-TOKEN: $KNOWN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1 | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('token','ERROR: '+str(d)))\""
                 },
                 "isError": true
               }
@@ -27411,7 +27411,7 @@
                 "id": "tooluse_fynf6zDXrxB9bFyfwgTlMg",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "# Use the already-known working token from earlier to create a fresh named one\nKNOWN_TOKEN=\"[REDACTED_GITLAB_PAT].01.0w13pskld\"\ncurl -sf -X POST \\\n  -H \"PRIVATE-TOKEN: $KNOWN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1 | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('token','ERROR: '+str(d)))\""
+                  "command": "# Use the already-known working token from earlier to create a fresh named one\nKNOWN_TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -sf -X POST \\\n  -H \"PRIVATE-TOKEN: $KNOWN_TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1 | python3 -c \"import sys,json; d=json.load(sys.stdin); print(d.get('token','ERROR: '+str(d)))\""
                 },
                 "isError": true
               },
@@ -27572,7 +27572,7 @@
                 "id": "tooluse_m2pa29C0CZZs2UAdbdpELk",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "# Try creating a PAT via the admin API using the known working token\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1"
+                  "command": "# Try creating a PAT via the admin API using the known working token\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1"
                 },
                 "isError": false
               },
@@ -27580,7 +27580,7 @@
                 "id": "tooluse_0jiyklrZGJkkA9zHPpyFLE",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}' 2>&1"
+                  "command": "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}' 2>&1"
                 },
                 "isError": false
               }
@@ -27652,7 +27652,7 @@
                 "id": "tooluse_m2pa29C0CZZs2UAdbdpELk",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "# Try creating a PAT via the admin API using the known working token\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1"
+                  "command": "# Try creating a PAT via the admin API using the known working token\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}' 2>&1"
                 },
                 "isError": false
               },
@@ -27675,11 +27675,11 @@
               "commandUse": {
                 "unverifiable": false,
                 "commands": [
-                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'"
+                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'"
                 ],
                 "requiresSecurityApproval": false,
                 "commandVariants": [
-                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'",
+                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-12-31\"}'",
                   "curl"
                 ]
               },
@@ -27699,13 +27699,13 @@
           "role": "tool",
           "data": {
             "role": "tool",
-            "content": "{\"id\":3,\"name\":\"seed-api-token-2\",\"revoked\":false,\"created_at\":\"2026-08-28T18:34:20.914Z\",\"description\":null,\"scopes\":[\"api\"],\"user_id\":1,\"last_used_at\":null,\"active\":true,\"granular\":false,\"expires_at\":\"2027-08-27\",\"token\":\"[REDACTED_GITLAB_PAT].01.0w19742n6\"}",
+            "content": "{\"id\":3,\"name\":\"seed-api-token-2\",\"revoked\":false,\"created_at\":\"2026-08-28T18:34:20.914Z\",\"description\":null,\"scopes\":[\"api\"],\"user_id\":1,\"last_used_at\":null,\"active\":true,\"granular\":false,\"expires_at\":\"2027-08-27\",\"token\":\"[REDACTED_GITLAB_PAT]\"}",
             "toolUsage": {
               "signature": {
                 "id": "tooluse_0jiyklrZGJkkA9zHPpyFLE",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}' 2>&1"
+                  "command": "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}' 2>&1"
                 },
                 "isError": false
               },
@@ -27728,11 +27728,11 @@
               "commandUse": {
                 "unverifiable": false,
                 "commands": [
-                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'"
+                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'"
                 ],
                 "requiresSecurityApproval": false,
                 "commandVariants": [
-                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w13pskld\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'",
+                  "curl -s -X POST \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users/1/personal_access_tokens\" \\\n  -d '{\"name\":\"seed-api-token-2\",\"scopes\":[\"api\"],\"expires_at\":\"2027-08-27\"}'",
                   "curl"
                 ]
               },
@@ -27921,7 +27921,7 @@
                 "id": "tooluse_xsydanEflz4PyVBUbCBDZA",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=$(docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)\n# Get the already-known token\nTOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" 2>&1"
+                  "command": "TOKEN=$(docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)\n# Get the already-known token\nTOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" 2>&1"
                 },
                 "isError": false
               }
@@ -27940,7 +27940,7 @@
                 "id": "tooluse_xsydanEflz4PyVBUbCBDZA",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=$(docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)\n# Get the already-known token\nTOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" 2>&1"
+                  "command": "TOKEN=$(docker exec gitlab cat /tmp/seed_token.txt 2>/dev/null || true)\n# Get the already-known token\nTOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" 2>&1"
                 },
                 "isError": false
               },
@@ -28011,7 +28011,7 @@
                 "id": "tooluse_wLOGmSkvDRZ4A9XyKpbolK",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               }
@@ -28030,7 +28030,7 @@
                 "id": "tooluse_wLOGmSkvDRZ4A9XyKpbolK",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               },
@@ -28096,7 +28096,7 @@
                 "id": "tooluse_XiY2TuURFDnEQMNNeR8BvQ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               },
@@ -28104,7 +28104,7 @@
                 "id": "tooluse_Z8zSp6RXmVamTOyDmMRG95",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               }
@@ -28123,7 +28123,7 @@
                 "id": "tooluse_XiY2TuURFDnEQMNNeR8BvQ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               },
@@ -28176,7 +28176,7 @@
                 "id": "tooluse_Z8zSp6RXmVamTOyDmMRG95",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X POST \\\n  -H \"PRIVATE-TOKEN: $TOKEN\" \\\n  -H \"Content-Type: application/json\" \\\n  \"http://localhost:8080/api/v4/users\" \\\n  -d '{\"name\":\"Demo User\",\"username\":\"demo\",\"email\":\"demo@example.com\",\"password\":\"[REDACTED_PASSWORD]\",\"skip_confirmation\":true}' 2>&1"
                 },
                 "isError": false
               },
@@ -28620,7 +28620,7 @@
                 "id": "tooluse_Wl04WaIVd2g0o2RzEK1GQQ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\n# Delete the demo user created with wrong password, and the half-created group\nUSER_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')\")\n[ -n \"$USER_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users/$USER_ID?hard_delete=true\" && echo \"Deleted demo user $USER_ID\"\nGROUP_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups?search=sdlc-harness\" | python3 -c \"import sys,json; g=[x for x in json.load(sys.stdin) if x['path']=='sdlc-harness']; print(g[0]['id'] if g else '')\")\n[ -n \"$GROUP_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups/$GROUP_ID\" && echo \"Deleted group $GROUP_ID\"\necho \"Cleanup done\""
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\n# Delete the demo user created with wrong password, and the half-created group\nUSER_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')\")\n[ -n \"$USER_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users/$USER_ID?hard_delete=true\" && echo \"Deleted demo user $USER_ID\"\nGROUP_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups?search=sdlc-harness\" | python3 -c \"import sys,json; g=[x for x in json.load(sys.stdin) if x['path']=='sdlc-harness']; print(g[0]['id'] if g else '')\")\n[ -n \"$GROUP_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups/$GROUP_ID\" && echo \"Deleted group $GROUP_ID\"\necho \"Cleanup done\""
                 },
                 "isError": false
               },
@@ -28648,7 +28648,7 @@
                 "id": "tooluse_Wl04WaIVd2g0o2RzEK1GQQ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\n# Delete the demo user created with wrong password, and the half-created group\nUSER_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')\")\n[ -n \"$USER_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users/$USER_ID?hard_delete=true\" && echo \"Deleted demo user $USER_ID\"\nGROUP_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups?search=sdlc-harness\" | python3 -c \"import sys,json; g=[x for x in json.load(sys.stdin) if x['path']=='sdlc-harness']; print(g[0]['id'] if g else '')\")\n[ -n \"$GROUP_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups/$GROUP_ID\" && echo \"Deleted group $GROUP_ID\"\necho \"Cleanup done\""
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\n# Delete the demo user created with wrong password, and the half-created group\nUSER_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print(u[0]['id'] if u else '')\")\n[ -n \"$USER_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users/$USER_ID?hard_delete=true\" && echo \"Deleted demo user $USER_ID\"\nGROUP_ID=$(curl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups?search=sdlc-harness\" | python3 -c \"import sys,json; g=[x for x in json.load(sys.stdin) if x['path']=='sdlc-harness']; print(g[0]['id'] if g else '')\")\n[ -n \"$GROUP_ID\" ] && curl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/groups/$GROUP_ID\" && echo \"Deleted group $GROUP_ID\"\necho \"Cleanup done\""
                 },
                 "isError": false
               },
@@ -28971,7 +28971,7 @@
                 "id": "tooluse_0dcHIrTsUSKstTz3JwpQ5A",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/projects/2?hard_delete=true\" && echo \"Deleted project 2\"\nsleep 3\n# Also check if demo user is truly gone\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print('demo user: '+str(u[0].get('id') if u else 'not found'))\""
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/projects/2?hard_delete=true\" && echo \"Deleted project 2\"\nsleep 3\n# Also check if demo user is truly gone\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print('demo user: '+str(u[0].get('id') if u else 'not found'))\""
                 },
                 "isError": false
               },
@@ -28999,7 +28999,7 @@
                 "id": "tooluse_0dcHIrTsUSKstTz3JwpQ5A",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT].01.0w19742n6\"\ncurl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/projects/2?hard_delete=true\" && echo \"Deleted project 2\"\nsleep 3\n# Also check if demo user is truly gone\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print('demo user: '+str(u[0].get('id') if u else 'not found'))\""
+                  "command": "TOKEN=\"[REDACTED_GITLAB_PAT]\"\ncurl -s -X DELETE -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/projects/2?hard_delete=true\" && echo \"Deleted project 2\"\nsleep 3\n# Also check if demo user is truly gone\ncurl -s -H \"PRIVATE-TOKEN: $TOKEN\" \"http://localhost:8080/api/v4/users?username=demo\" | python3 -c \"import sys,json; u=json.load(sys.stdin); print('demo user: '+str(u[0].get('id') if u else 'not found'))\""
                 },
                 "isError": false
               },
@@ -29223,7 +29223,7 @@
                 "id": "tooluse_ubG19XFPTFN0Er8IGp1UEZ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w19742n6\" \\\n  | python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\""
+                  "command": "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  | python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\""
                 },
                 "isError": false
               },
@@ -29250,7 +29250,7 @@
                 "id": "tooluse_ubG19XFPTFN0Er8IGp1UEZ",
                 "name": "execute_command",
                 "arguments": {
-                  "command": "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w19742n6\" \\\n  | python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\""
+                  "command": "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\" \\\n  | python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\""
                 },
                 "isError": false
               },
@@ -29273,12 +29273,12 @@
               "commandUse": {
                 "unverifiable": false,
                 "commands": [
-                  "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w19742n6\"",
+                  "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\"",
                   "python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\""
                 ],
                 "requiresSecurityApproval": false,
                 "commandVariants": [
-                  "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT].01.0w19742n6\"",
+                  "curl -s \"http://localhost:8080/api/v4/projects/3/repository/tree\" \\\n  -H \"PRIVATE-TOKEN: [REDACTED_GITLAB_PAT]\"",
                   "curl",
                   "python3 -c \"import sys,json; [print(f['name']) for f in json.load(sys.stdin)]\"",
                   "python3"
