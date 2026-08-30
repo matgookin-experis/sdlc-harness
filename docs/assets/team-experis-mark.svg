@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Team Experis mark</title>
+  <defs>
+    <linearGradient id="chevron" x1="10" y1="16" x2="58" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6257f5"/>
+      <stop offset="1" stop-color="#243cff"/>
+    </linearGradient>
+    <linearGradient id="accents" x1="58" y1="18" x2="86" y2="82" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2f9df4"/>
+      <stop offset="1" stop-color="#3276ed"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 18 49 48 18 78" fill="none" stroke="url(#chevron)" stroke-linecap="round" stroke-linejoin="round" stroke-width="18"/>
+  <path d="m64 36 16-16M64 60l16 16" fill="none" stroke="url(#accents)" stroke-linecap="round" stroke-width="16"/>
+</svg>

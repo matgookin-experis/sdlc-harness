@@ -5,31 +5,48 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>sdlc-harness documentation</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/team-experis-mark.svg" type="image/svg+xml">
 </head>
 <body>
-<nav class="top">
-  <div class="page">
-    <a class="brand" href="index.html">sdlc-harness docs</a>
-    <a href="problem-statement.html">Problem Statement</a>
-    <a href="agents-and-tools.html">Agents &amp; Tools</a>
-    <a href="bob-usage.html">Bob Usage</a>
-    <a href="security.html">Security</a>
-    <a href="onboarding/runbook.html">Onboarding</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="top" aria-label="Primary navigation">
+  <div class="nav-shell">
+    <a class="brand" href="index.html" aria-label="Team Experis SDLC Harness home">
+      <img src="assets/team-experis-logo.svg" alt="Team Experis">
+      <span>SDLC Harness</span>
+    </a>
+    <div class="nav-links">
+      <a href="problem-statement.html">Problem Statement</a>
+      <a href="agents-and-tools.html">Agents &amp; Tools</a>
+      <a href="bob-usage.html">Bob Usage</a>
+      <a href="security.html">Security</a>
+      <a href="onboarding/runbook.html">Onboarding</a>
+    </div>
   </div>
 </nav>
-<main class="page">
-  <h1>sdlc-harness documentation</h1>
-  <p>Human-facing documentation for the sdlc-harness hackathon project, migrated from
-  Markdown to self-contained HTML (Task 47). Project setup and code-level docs (the
-  root <code>README.md</code>, <code>AGENTS.md</code>, and the
-  Bob skill itself) stay as Markdown, since tooling depends on their exact format; see
-  the note at the bottom of this page.</p>
+<main class="page" id="main-content" tabindex="-1">
+  <header class="hero">
+    <div class="hero-content">
+      <p class="eyebrow">Team Experis · AI-powered SDLC governance</p>
+      <h1>sdlc-harness documentation</h1>
+      <p class="lead">Human-facing documentation for the sdlc-harness hackathon project,
+      from the problem it solves to onboarding and security.</p>
+    </div>
+  </header>
+
+  <p>Project setup and code-level docs (the root <code>README.md</code>,
+  <code>AGENTS.md</code>, and the Bob skill itself) stay as Markdown, since tooling
+  depends on their exact format; see the note at the bottom of this page.</p>
 
   <h2>Project</h2>
   <div class="card-grid">
     <a class="card" href="problem-statement.html">
       <h3>Problem Statement &amp; Solution</h3>
       <p>The problem, the solution, target users, and why it's a new approach.</p>
+    </a>
+    <a class="card" href="agents-and-tools.html">
+      <h3>Agents &amp; Tools</h3>
+      <p>The five governance agents, their guardrails, and the MCP tools they use.</p>
     </a>
     <a class="card" href="bob-usage.html">
       <h3>How Bob Was Used to Build This</h3>
@@ -74,6 +91,14 @@
     <code>seed.sh</code> and rendered there.</li>
   </ul>
 </main>
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="assets/team-experis-mark.svg" alt="">
+      <span>Built by Team Experis · SDLC Harness</span>
+    </div>
+  </div>
+</footer>
 <script src="assets/nav.js"></script>
 </body>
 </html>

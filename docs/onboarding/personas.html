@@ -5,19 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Persona &amp; Permission Guide — sdlc-harness</title>
 <link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/team-experis-mark.svg" type="image/svg+xml">
 </head>
 <body>
-<nav class="top">
-  <div class="page">
-    <a class="brand" href="../index.html">sdlc-harness docs</a>
-    <a href="../problem-statement.html">Problem Statement</a>
-    <a href="../agents-and-tools.html">Agents &amp; Tools</a>
-    <a href="../bob-usage.html">Bob Usage</a>
-    <a href="../security.html">Security</a>
-    <a href="runbook.html">Onboarding</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="top" aria-label="Primary navigation">
+  <div class="nav-shell">
+    <a class="brand" href="../index.html" aria-label="Team Experis SDLC Harness home">
+      <img src="../assets/team-experis-logo.svg" alt="Team Experis">
+      <span>SDLC Harness</span>
+    </a>
+    <div class="nav-links">
+      <a href="../problem-statement.html">Problem Statement</a>
+      <a href="../agents-and-tools.html">Agents &amp; Tools</a>
+      <a href="../bob-usage.html">Bob Usage</a>
+      <a href="../security.html">Security</a>
+      <a href="runbook.html" aria-current="page">Onboarding</a>
+    </div>
   </div>
 </nav>
-<main class="page">
+<main class="page" id="main-content" tabindex="-1">
   <h1>Persona &amp; Permission Guide</h1>
   <p><span class="tag">Task 35 — P1</span></p>
   <div id="toc"></div>
@@ -30,6 +37,7 @@
   <h2>Overview</h2>
   <p>The demo uses two personas to show that sdlc-harness governs work-item quality for
   individual contributors and project leads without needing elevated GitLab access.</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Persona</th><th>GitLab account</th><th>GitLab role</th><th>Bob mode</th></tr></thead>
     <tbody>
@@ -37,6 +45,7 @@
       <tr><td>Project Lead</td><td><code>root</code></td><td>Owner</td><td><code>🔧 SDLC Harness</code></td></tr>
     </tbody>
   </table>
+  </div>
   <p>Both personas use the same Bob mode and the same skill. The difference is in what
   they can write back to GitLab: the Developer persona is the primary demo persona; the
   Project Lead persona is used to show that the same tool works at a higher privilege
@@ -54,6 +63,7 @@
   <h3>GitLab role</h3>
   <p><code>Developer</code>, the minimum role required for the MCP tools to
   function.</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Capability</th><th>Allowed?</th><th>Reason</th></tr></thead>
     <tbody>
@@ -67,11 +77,13 @@
       <tr><td>Configure milestones</td><td>❌</td><td>Requires Maintainer</td></tr>
     </tbody>
   </table>
+  </div>
   <p>The <code>demo</code> user is assigned the Developer role in the
   <code>sdlc-harness</code> group by <code>seed.sh</code>.</p>
 
   <h3>Bob permissions</h3>
   <p>The <code>🔧 SDLC Harness</code> mode gives this persona access to:</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Group</th><th>What it enables</th></tr></thead>
     <tbody>
@@ -85,6 +97,7 @@
       <tr><td><code>mode</code></td><td>Switch modes if needed</td></tr>
     </tbody>
   </table>
+  </div>
   <p>No additional Bob configuration is required for the Developer persona beyond the
   standard installation described in the runbook.</p>
 
@@ -110,6 +123,7 @@
   <code>sdlc-harness</code> group. In a real deployment this persona would typically be
   <code>Maintainer</code> (the minimum role needed for label management and milestone
   configuration).</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Capability</th><th>Allowed?</th><th>Reason</th></tr></thead>
     <tbody>
@@ -121,6 +135,7 @@
       <tr><td>Access project settings</td><td>✅</td><td>Maintainer+</td></tr>
     </tbody>
   </table>
+  </div>
 
   <h3>Bob permissions</h3>
   <p>Same <code>🔧 SDLC Harness</code> mode and the same permission groups as the
@@ -175,6 +190,7 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
   <hr>
 
   <h2>Minimum role reference</h2>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Action the skill performs</th><th>Minimum GitLab role</th></tr></thead>
     <tbody>
@@ -189,11 +205,20 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
       <tr><td>Manage milestones</td><td>Maintainer</td></tr>
     </tbody>
   </table>
+  </div>
   <p>For the P0 demo, <strong>Developer</strong> is sufficient. The only action that
   requires a higher role is creating labels, and the <code>manage.sh seed</code> workflow
   creates all required labels as <code>root</code>, so the Developer persona never needs
   to create new ones during the demo.</p>
 </main>
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="../assets/team-experis-mark.svg" alt="">
+      <span>Built by Team Experis · SDLC Harness</span>
+    </div>
+  </div>
+</footer>
 <script src="../assets/nav.js"></script>
 </body>
 </html>

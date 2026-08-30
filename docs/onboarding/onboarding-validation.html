@@ -5,19 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Onboarding Conversation Validation — sdlc-harness</title>
 <link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/team-experis-mark.svg" type="image/svg+xml">
 </head>
 <body>
-<nav class="top">
-  <div class="page">
-    <a class="brand" href="../index.html">sdlc-harness docs</a>
-    <a href="../problem-statement.html">Problem Statement</a>
-    <a href="../agents-and-tools.html">Agents &amp; Tools</a>
-    <a href="../bob-usage.html">Bob Usage</a>
-    <a href="../security.html">Security</a>
-    <a href="runbook.html">Onboarding</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="top" aria-label="Primary navigation">
+  <div class="nav-shell">
+    <a class="brand" href="../index.html" aria-label="Team Experis SDLC Harness home">
+      <img src="../assets/team-experis-logo.svg" alt="Team Experis">
+      <span>SDLC Harness</span>
+    </a>
+    <div class="nav-links">
+      <a href="../problem-statement.html">Problem Statement</a>
+      <a href="../agents-and-tools.html">Agents &amp; Tools</a>
+      <a href="../bob-usage.html">Bob Usage</a>
+      <a href="../security.html">Security</a>
+      <a href="runbook.html" aria-current="page">Onboarding</a>
+    </div>
   </div>
 </nav>
-<main class="page">
+<main class="page" id="main-content" tabindex="-1">
   <h1>Onboarding Conversation Validation</h1>
   <p><span class="tag">Task 34 — P0</span></p>
   <div id="toc"></div>
@@ -62,6 +69,7 @@
   <hr>
 
   <h3>2. All five required fields are present</h3>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Field</th><th>Type</th><th>Requirement</th></tr></thead>
     <tbody>
@@ -72,6 +80,7 @@
       <tr><td><code>transitionRules</code></td><td>object</td><td>At least one key; each key is a valid <code>workflowState</code></td></tr>
     </tbody>
   </table>
+  </div>
   <p><strong>Check:</strong></p>
   <pre><code>python3 -c "
 import json, sys
@@ -161,6 +170,7 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
   <h2>Acceptance criteria (for Task 34)</h2>
   <p>All seven checks above must pass on a clean machine after following the
   <a href="runbook.html">onboarding runbook</a>.</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Check</th><th>Pass condition</th></tr></thead>
     <tbody>
@@ -173,7 +183,16 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
       <tr><td>7. Scoped audit/review reachable</td><td>Live issue returned; guarded review shown; no auth or scope errors</td></tr>
     </tbody>
   </table>
+  </div>
 </main>
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="../assets/team-experis-mark.svg" alt="">
+      <span>Built by Team Experis · SDLC Harness</span>
+    </div>
+  </div>
+</footer>
 <script src="../assets/nav.js"></script>
 </body>
 </html>

@@ -5,19 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Security Guidelines — sdlc-harness</title>
 <link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="assets/team-experis-mark.svg" type="image/svg+xml">
 </head>
 <body>
-<nav class="top">
-  <div class="page">
-    <a class="brand" href="index.html">sdlc-harness docs</a>
-    <a href="problem-statement.html">Problem Statement</a>
-    <a href="agents-and-tools.html">Agents &amp; Tools</a>
-    <a href="bob-usage.html">Bob Usage</a>
-    <a href="security.html">Security</a>
-    <a href="onboarding/runbook.html">Onboarding</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="top" aria-label="Primary navigation">
+  <div class="nav-shell">
+    <a class="brand" href="index.html" aria-label="Team Experis SDLC Harness home">
+      <img src="assets/team-experis-logo.svg" alt="Team Experis">
+      <span>SDLC Harness</span>
+    </a>
+    <div class="nav-links">
+      <a href="problem-statement.html">Problem Statement</a>
+      <a href="agents-and-tools.html">Agents &amp; Tools</a>
+      <a href="bob-usage.html">Bob Usage</a>
+      <a href="security.html" aria-current="page">Security</a>
+      <a href="onboarding/runbook.html">Onboarding</a>
+    </div>
   </div>
 </nav>
-<main class="page">
+<main class="page" id="main-content" tabindex="-1">
   <h1>Security Guidelines for Watsonx Hackathon</h1>
   <div id="toc"></div>
 
@@ -102,6 +109,14 @@ const gitlabToken = process.env.GITLAB_TOKEN;</code></pre>
     <li><a href="https://12factor.net/config">Environment Variables Guide</a></li>
   </ul>
 </main>
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="assets/team-experis-mark.svg" alt="">
+      <span>Built by Team Experis · SDLC Harness</span>
+    </div>
+  </div>
+</footer>
 <script src="assets/nav.js"></script>
 </body>
 </html>

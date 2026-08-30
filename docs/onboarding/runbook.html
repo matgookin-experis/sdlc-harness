@@ -5,19 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Onboarding Runbook — sdlc-harness</title>
 <link rel="stylesheet" href="../assets/style.css">
+<link rel="icon" href="../assets/team-experis-mark.svg" type="image/svg+xml">
 </head>
 <body>
-<nav class="top">
-  <div class="page">
-    <a class="brand" href="../index.html">sdlc-harness docs</a>
-    <a href="../problem-statement.html">Problem Statement</a>
-    <a href="../agents-and-tools.html">Agents &amp; Tools</a>
-    <a href="../bob-usage.html">Bob Usage</a>
-    <a href="../security.html">Security</a>
-    <a href="runbook.html">Onboarding</a>
+<a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="top" aria-label="Primary navigation">
+  <div class="nav-shell">
+    <a class="brand" href="../index.html" aria-label="Team Experis SDLC Harness home">
+      <img src="../assets/team-experis-logo.svg" alt="Team Experis">
+      <span>SDLC Harness</span>
+    </a>
+    <div class="nav-links">
+      <a href="../problem-statement.html">Problem Statement</a>
+      <a href="../agents-and-tools.html">Agents &amp; Tools</a>
+      <a href="../bob-usage.html">Bob Usage</a>
+      <a href="../security.html">Security</a>
+      <a href="runbook.html" aria-current="page">Onboarding</a>
+    </div>
   </div>
 </nav>
-<main class="page">
+<main class="page" id="main-content" tabindex="-1">
   <h1>SDLC Harness — New Team Member Onboarding Runbook</h1>
   <div id="toc"></div>
 
@@ -125,6 +132,7 @@ Installation complete.</code></pre>
   <p>If <code>.env</code> already exists, <strong>merge</strong> the variables below instead
   of overwriting it and run <code>chmod 600 .env</code>.</p>
   <p>Open the project-root <code>.env</code> and set:</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Variable</th><th>Value</th></tr></thead>
     <tbody>
@@ -133,6 +141,7 @@ Installation complete.</code></pre>
       <tr><td><code>GITLAB_TOKEN</code></td><td>A Personal Access Token (see below)</td></tr>
     </tbody>
   </table>
+  </div>
   <p><strong>Creating a Personal Access Token:</strong></p>
   <ol>
     <li>Log into GitLab at <strong>http://localhost:8080</strong> as <code>demo</code>
@@ -182,6 +191,7 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
 
   <h2>Step 7 — Complete the onboarding conversation</h2>
   <p>Bob will ask four questions. Use the values below for the demo project:</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Question</th><th>Answer</th></tr></thead>
     <tbody>
@@ -191,6 +201,7 @@ SDLC_SMOKE_LIVE=true SDLC_ENV_FILE="$(cd ../.. &amp;&amp; pwd)/.env" npm run smo
       <tr><td>What are the transition rules?</td><td>Open→In Progress; In Progress→In Review; In Review→Done</td></tr>
     </tbody>
   </table>
+  </div>
   <p>Bob will save this configuration to <code>.sdlc-harness.json</code> in the repo
   root and confirm it is ready to monitor.</p>
 
@@ -213,6 +224,7 @@ What would you like to do?
   <hr>
 
   <h2>Quick Reference</h2>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Resource</th><th>URL / path</th></tr></thead>
     <tbody>
@@ -225,11 +237,13 @@ What would you like to do?
       <tr><td>Telemetry log</td><td><code>sdlc-harness-telemetry.jsonl</code> (repo root, gitignored)</td></tr>
     </tbody>
   </table>
+  </div>
 
   <hr>
 
   <h2>Maintenance and cleanup</h2>
   <p>Run these commands from the repository root:</p>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Goal</th><th>Command</th></tr></thead>
     <tbody>
@@ -240,6 +254,7 @@ What would you like to do?
       <tr><td>Return the full demo to a freshly cloned state</td><td><code>./gitlab-local/manage.sh uninstall</code></td></tr>
     </tbody>
   </table>
+  </div>
   <p>The full uninstall is destructive: it removes Docker volumes, local
   <code>.env</code> files, onboarding state, telemetry, build artifacts, and the
   sdlc-harness Bob registrations. It prompts before proceeding.</p>
@@ -247,6 +262,7 @@ What would you like to do?
   <hr>
 
   <h2>Troubleshooting</h2>
+  <div class="table-scroll">
   <table>
     <thead><tr><th>Symptom</th><th>Fix</th></tr></thead>
     <tbody>
@@ -259,7 +275,16 @@ What would you like to do?
       <tr><td><code>.sdlc-harness.json</code> not created after onboarding</td><td>The skill config persistence requires the onboarding flow to complete all four questions</td></tr>
     </tbody>
   </table>
+  </div>
 </main>
+<footer class="site-footer">
+  <div class="footer-shell">
+    <div class="footer-brand">
+      <img src="../assets/team-experis-mark.svg" alt="">
+      <span>Built by Team Experis · SDLC Harness</span>
+    </div>
+  </div>
+</footer>
 <script src="../assets/nav.js"></script>
 </body>
 </html>
