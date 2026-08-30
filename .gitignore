@@ -127,9 +127,10 @@ sdlc-harness-telemetry.jsonl
 # sdlc-harness onboarding scratch input (regenerated each onboarding run)
 onboarding-input.json
 
-# sdlc-harness apply/reject decision payloads (scratch files fed to the CLI
-# during a review session — regenerated from each audit, must not be committed)
-decision-*.json
+# sdlc-harness scratch directory — apply/reject decision payloads fed to the
+# CLI during a review session (regenerated from each audit, must not be
+# committed). See bob-kit/skills/sdlc-harness/SKILL.md Phase 4.
+.bob-scratch/
 
 # seed-issues.sh scratch dir — removed by its EXIT trap, but survives if the
 # script is interrupted, and then shows up as an untracked file.

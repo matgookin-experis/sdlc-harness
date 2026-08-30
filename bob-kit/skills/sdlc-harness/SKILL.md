@@ -294,9 +294,10 @@ boosted at 0.25.
   excluded; they produce unreliable directions on real backlogs.
 
 **Write path (after approval):** put the reviewed finding and optional edited link type in
-a decision JSON file and run `.../cli.js apply <decision.json>`. The scoped adapter maps
-`relates-to` to GitLab's `relates_to`. It validates and applies the edited link type, not the
-original suggestion. Never create the relationship before approval.
+a decision JSON file under `.bob-scratch/decisions/` (gitignored scratch directory, created
+on demand) and run `.../cli.js apply <decision.json>`. The scoped adapter maps `relates-to`
+to GitLab's `relates_to`. It validates and applies the edited link type, not the original
+suggestion. Never create the relationship before approval.
 
 The audit does not fan out an additional link-list request for every issue. GitLab's issue
 links API rejects duplicate links; that response is surfaced as a failed write and no
@@ -401,11 +402,13 @@ Reply with:
 **Only `apply` and `edit` call the GitLab writer adapter.** `skip` and `reject` do not
 modify any GitLab data.
 
-Use the compiled bridge for review decisions:
+Use the compiled bridge for review decisions. Write the decision payload under the project's
+gitignored `.bob-scratch/decisions/` directory (created on demand) rather than the project
+root, so scratch review files don't accumulate there:
 
 ```bash
-node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" apply <decision.json>
-node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" reject <decision.json>
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" apply .bob-scratch/decisions/<decision>.json
+node "$HOME/.bob/skills/sdlc-harness/dist/src/cli.js" reject .bob-scratch/decisions/<decision>.json
 ```
 
 The CLI runtime-validates the finding discriminator, agent/action pairing, issue IDs,
