@@ -12,7 +12,7 @@ Mark each item **✅ Pass**, **❌ Fail**, or **⚠ N/A** when testing.
 | # | Step | Expected Result | Result |
 |---|---|---|---|
 | 1.1 | Open `index.html` in a browser | Page loads without errors (check browser console) | |
-| 1.2 | Observe the weather card without interacting | Card shows "New York" with temperature, condition, humidity, wind speed, and a "Last updated" time | |
+| 1.2 | Observe the weather card without interacting | Card shows "New York" with temperature, condition, humidity, wind speed, UV Index, sunburn-risk guidance, and a "Last updated" time | |
 | 1.3 | No city is entered in the input field | Input field is empty; no validation message is shown | |
 
 ---
@@ -92,3 +92,20 @@ Mark each item **✅ Pass**, **❌ Fail**, or **⚠ N/A** when testing.
 | 8.2 | Observe focus indicators on each interactive element | Visible blue outline is shown on each focused element | |
 | 8.3 | Trigger the validation error | Screen-reader `role="alert"` region announces the error message | |
 | 8.4 | Check the theme toggle `aria-label` in dark mode | `aria-label` reads "Switch to light mode" | |
+
+---
+
+## 9. UV Index and Sunburn Risk
+
+| # | Step | Expected Result | Result |
+|---|---|---|---|
+| 9.1 | Search for the same city twice | The UV Index, risk category, and guidance are identical both times | |
+| 9.2 | Search several different cities | Each UV Index is an integer from 0 to 12 and shows Low, Moderate, High, Very High, or Extreme risk | |
+| 9.3 | Observe the UV risk display | The numeric value and text category are both visible, so risk is not communicated by colour alone | |
+| 9.4 | Switch between light and dark themes | The UV badge and guidance remain readable in both themes | |
+| 9.5 | Set the viewport to 375 × 812 | The UV value, badge, and guidance fit without horizontal scrolling | |
+
+### Automated UV checks
+
+Run `node uv-index.test.js` from this directory. It verifies deterministic generation,
+the 0–12 range, and every risk-category boundary.

@@ -403,6 +403,65 @@ body {
   color: var(--color-text);
 }
 
+.uv-detail {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-md);
+}
+
+.uv-reading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.uv-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.uv-risk-badge[data-risk="low"] {
+  color: #16703a;
+  background: #e5f6eb;
+}
+
+.uv-risk-badge[data-risk="moderate"] {
+  color: #705800;
+  background: #fff4bf;
+}
+
+.uv-risk-badge[data-risk="high"] {
+  color: #8a3d00;
+  background: #ffead7;
+}
+
+.uv-risk-badge[data-risk="very-high"] {
+  color: #982222;
+  background: #ffe1e1;
+}
+
+.uv-risk-badge[data-risk="extreme"] {
+  color: #6f2b87;
+  background: #f3e2fa;
+}
+
+[data-theme="dark"] .uv-risk-badge {
+  background: var(--color-surface);
+}
+
+.uv-guidance {
+  margin-top: var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 /* ------------------------------------------------------------------ */
 /* 10. Footer                                                          */
 /* ------------------------------------------------------------------ */

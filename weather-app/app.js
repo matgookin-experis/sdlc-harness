@@ -6,6 +6,7 @@
  *  - Search form submission and validation
  *  - Loading state management
  *  - Weather card rendering
+ *  - UV Index and sunburn-risk guidance
  *  - Light/dark theme toggle with localStorage persistence
  */
 
@@ -47,7 +48,7 @@ function hashString(str) {
  * Generate deterministic mock weather data for the given city.
  *
  * @param {string} city  City name as entered by the user.
- * @returns {{city: string, tempF: number, condition: string, humidity: string, wind: string, updatedAt: string}}
+ * @returns {{city: string, tempF: number, condition: string, humidity: string, wind: string, uvIndex: number, uvRisk: {level: string, key: string, guidance: string}, updatedAt: string}}
  */
 function getMockWeather(city) {
   const seed = hashString(city.toLowerCase().trim());
@@ -67,6 +68,10 @@ function getMockWeather(city) {
   // Wind speed: 0 – 40 mph
   const wind = ((seed >>> 8) % 41) + ' mph';
 
+  // UV Index: 0 – 12, including the 11+ Extreme category
+  const uvIndex = getUvIndex(seed);
+  const uvRisk = getUvRisk(uvIndex);
+
   // Current timestamp
   const now = new Date();
   const updatedAt = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -77,6 +82,8 @@ function getMockWeather(city) {
     condition,
     humidity,
     wind,
+    uvIndex,
+    uvRisk,
     updatedAt,
   };
 }
@@ -104,6 +111,9 @@ const cardTemp          = document.getElementById('card-temp');
 const cardCondition     = document.getElementById('card-condition');
 const cardHumidity      = document.getElementById('card-humidity');
 const cardWind          = document.getElementById('card-wind');
+const cardUvIndex       = document.getElementById('card-uv-index');
+const cardUvRisk        = document.getElementById('card-uv-risk');
+const cardUvGuidance    = document.getElementById('card-uv-guidance');
 const cardUpdated       = document.getElementById('card-updated');
 const themeToggleBtn    = document.getElementById('theme-toggle');
 
@@ -114,7 +124,7 @@ const themeToggleBtn    = document.getElementById('theme-toggle');
 /**
  * Update the weather card with new data.
  *
- * @param {{city: string, tempF: number, condition: string, humidity: string, wind: string, updatedAt: string}} data
+ * @param {{city: string, tempF: number, condition: string, humidity: string, wind: string, uvIndex: number, uvRisk: {level: string, key: string, guidance: string}, updatedAt: string}} data
  */
 function renderWeatherCard(data) {
   cardCity.textContent      = data.city;
@@ -122,6 +132,10 @@ function renderWeatherCard(data) {
   cardCondition.textContent = data.condition;
   cardHumidity.textContent  = data.humidity;
   cardWind.textContent      = data.wind;
+  cardUvIndex.textContent   = data.uvIndex;
+  cardUvRisk.textContent    = data.uvRisk.level;
+  cardUvRisk.dataset.risk   = data.uvRisk.key;
+  cardUvGuidance.textContent = data.uvRisk.guidance;
   cardUpdated.textContent   = 'Last updated: ' + data.updatedAt;
 }
 

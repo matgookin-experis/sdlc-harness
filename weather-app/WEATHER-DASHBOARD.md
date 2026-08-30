@@ -22,7 +22,9 @@ repeatable without an API key or network connection.
 |---|---|
 | `index.html` | Application shell — semantic HTML, accessible landmarks and form |
 | `styles.css` | All styling — CSS custom properties, card layout, dark mode, responsive breakpoints |
-| `app.js` | All runtime behaviour — mock data, search, validation, loading state, theme toggle |
+| `app.js` | Main runtime behaviour — mock weather data, search, validation, loading state, theme toggle |
+| `uv-index.js` | Deterministic UV Index generation and risk/guidance classification |
+| `uv-index.test.js` | Dependency-free automated checks for UV generation and category boundaries |
 | `WEATHER-DASHBOARD.md` | This file |
 | `tests.md` | Manual test checklist |
 
@@ -51,6 +53,8 @@ start index.html
 - **Default result** — "New York" is displayed on first load so the page is never blank.
 - **Validation** — An error message is shown when the city field is empty.
 - **Loading state** — A brief spinner simulates an async data fetch (300 ms).
+- **UV Index and sunburn risk** — Every city receives a deterministic UV Index from
+  0–12, a named risk category, and concise sun-protection guidance.
 - **Light / Dark theme** — Toggle button in the header; selection is persisted in
   `localStorage` across page reloads.
 - **Accessible** — Semantic HTML, ARIA labels, keyboard navigation, and visible focus
