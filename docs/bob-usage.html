@@ -25,13 +25,13 @@
   sdlc-harness. It's distinct from how the shipped product uses Bob at runtime, which is
   covered in <a href="problem-statement.html">Problem Statement &amp; Solution</a> and
   <code>bob-kit/skills/sdlc-harness/SKILL.md</code>. Every session referenced here has a
-  corresponding screenshot in <code>bob-sessions/</code>, captured as the build progressed
+  corresponding screenshot in <code>bob_sessions/</code>, captured as the build progressed
   rather than reconstructed afterward.</p>
 
   <h2>Planning and problem framing</h2>
   <p>The task list this project was built against wasn't written by hand and then handed
   to Bob to execute; Bob wrote the first draft of it. The team's prompt
-  (<a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a>)
+  (<a href="../bob_sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a>)
   pointed Bob at the already-drafted Problem Statement and asked it to break the project
   into an MVP task list "using the IBM Bob IDE," specifying a required numbering and
   priority format.</p>
@@ -40,23 +40,23 @@
   team wrote a first pass, then handed it to Bob along with the exact judging constraints
   (500 words, specific problem, target users, why it's creative) and asked it to tighten
   the draft against them
-  (<a href="../bob-sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a>).</p>
+  (<a href="../bob_sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a>).</p>
 
   <h2>Infrastructure</h2>
   <p>The GitLab Docker stack was built and debugged in Bob, not just scaffolded. One
   session explicitly asked Bob to troubleshoot why <code>./manage.sh seed</code> wasn't
   working against <code>gitlab-local/docker-compose.yml</code>
-  (<a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a>).
+  (<a href="../bob_sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a>).
   Another asked Bob to confirm, against the project task list, whether Section 1
   (Infrastructure) was actually complete before moving on
-  (<a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a>)
+  (<a href="../bob_sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a>)
   rather than assuming it from memory.</p>
 
   <h2>Skill authoring</h2>
   <p>The <code>sdlc-harness</code> skill scaffold (Task 17) started as its own Bob
   session: create a branch off <code>dev</code>, then plan the skill scaffold
   specifically
-  (<a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a>).
+  (<a href="../bob_sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a>).
   <code>SKILL.md</code> was then built up incrementally across several follow-on sessions
   rather than in one shot, including a later refactor that folded a separate
   <code>AGENT_ORCHESTRATION.md</code> draft directly into <code>SKILL.md</code> once it
@@ -73,10 +73,10 @@
   task gets only its own step and the prior task's handoff summary, not the whole plan
   re-read every time, which keeps token cost from scaling linearly with plan length. One
   of these sessions
-  (<a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a>)
+  (<a href="../bob_sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a>)
   shows a 91.5k/270k-token planning task for exactly this pair of tasks. A separate
   session
-  (<a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a>)
+  (<a href="../bob_sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a>)
   shows Section 3 (Tasks 27 through 31: Bob mode definition, model-usage rationale, MCP
   registry entry, agent orchestration design, skill unit tests) dispatched to Bob as one
   batch, at
@@ -84,7 +84,7 @@
 
   <p>Tasks 20 through 26 &mdash; the five agents, the human review interface and the
   suggestion telemetry &mdash; were built in a single tracked session
-  (<a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a>),
+  (<a href="../bob_sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a>),
   16 of 16 sub-tasks completed at a cost of 9.03 Bobcoins. The session summary maps each
   agent to its task number and source file, which is why the repo's module layout matches
   the project task list one-for-one rather than approximately.</p>
@@ -97,7 +97,7 @@
   agents had actually produced.</p>
 
   <p>That review round
-  (<a href="../bob-sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a>,
+  (<a href="../bob_sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a>,
   22.34 Bobcoins &mdash; the most expensive session in the project) was where Bob was used
   as a reviewer rather than a generator, and it found defects that the passing test suite
   did not. The most serious: <code>applyFinding</code> recorded a telemetry outcome of
@@ -112,7 +112,7 @@
 
   <p>The finished loop was then verified against a running GitLab instance rather than
   against mocks
-  (<a href="../bob-sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a>,
+  (<a href="../bob_sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a>,
   12 of 12 at 6.42 Bobcoins). Bob drove the agents through the MCP tools only &mdash; no
   shell, no <code>curl</code>, no <code>git</code> &mdash; applied suggestions to real
   seeded issues, then re-read those issues back from GitLab to confirm the writes had
@@ -126,7 +126,7 @@
   <code>index.html</code>, <code>styles.css</code>, <code>app.js</code>,
   <code>README.md</code>, <code>tests.md</code>, then review and validate all files),
   tracked and checked off inside Bob's Tasks panel
-  (<a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a>).</p>
+  (<a href="../bob_sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a>).</p>
 
   <h2>Model usage</h2>
   <p>The skill asks Bob's built-in model to generate content at exactly two points: drafting Acceptance
@@ -141,19 +141,19 @@
       <tr><th>Screenshot</th><th>What it captures</th></tr>
     </thead>
     <tbody>
-      <tr><td><a href="../bob-sessions/teamexperis_create_gitlab_container.png"><code>teamexperis_create_gitlab_container.png</code></a></td><td>Initial repo clone task</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a></td><td>Project task list drafted by Bob from the Problem Statement</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a></td><td>Bob tightening the problem statement against the judging constraints</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a></td><td>Debugging <code>docker-compose.yml</code> / <code>manage.sh seed</code></td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a></td><td>Bob confirming Section 1 completion against the project task list</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a></td><td>Branching and planning the skill scaffold (Task 17)</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>
-      <tr><td><a href="../bob-sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a></td><td>Tasks 20-26 built &mdash; five agents, review interface, telemetry (16/16, 9.03 Bobcoins)</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a></td><td>Bob reviewing its own output: telemetry, detector and grammar defects fixed, then merged to <code>dev</code> (3/3, 22.34 Bobcoins)</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a></td><td>End-to-end verification against a live GitLab through MCP tools only (12/12, 6.42 Bobcoins)</td></tr>
-      <tr><td><a href="../bob-sessions/teamexperis_bob_budget_used.png"><code>teamexperis_bob_budget_used.png</code></a></td><td>Bob budget consumed across the build: 40.02 of 40.00 Bobcoins</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_create_gitlab_container.png"><code>teamexperis_create_gitlab_container.png</code></a></td><td>Initial repo clone task</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_todo_list.png"><code>teamexperis_todo_list.png</code></a></td><td>Project task list drafted by Bob from the Problem Statement</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_problem_statement_solution.png"><code>teamexperis_problem_statement_solution.png</code></a></td><td>Bob tightening the problem statement against the judging constraints</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_gitlab_container_debug.png"><code>teamexperis_gitlab_container_debug.png</code></a></td><td>Debugging <code>docker-compose.yml</code> / <code>manage.sh seed</code></td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_create_weatherapp_container.png"><code>teamexperis_create_weatherapp_container.png</code></a></td><td>Bob confirming Section 1 completion against the project task list</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_2b_task_17.png"><code>teamexperis_2b_task_17.png</code></a></td><td>Branching and planning the skill scaffold (Task 17)</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_tasks2b18and19.png"><code>teamexperis_tasks2b18and19.png</code></a></td><td>Planning Tasks 18 and 19 (onboarding flow, work item templates)</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_agent_skill_config.png"><code>teamexperis_agent_skill_config.png</code></a></td><td>Section 3 (Tasks 27-31) dispatched as one batch</td></tr>
+      <tr><td><a href="../bob_sessions/Prasanna-weather-dashboard-session-summary.png"><code>Prasanna-weather-dashboard-session-summary.png</code></a></td><td>The weather-app build, tracked via Bob's Tasks panel</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_tasks20-26_agents_build.png"><code>teamexperis_tasks20-26_agents_build.png</code></a></td><td>Tasks 20-26 built &mdash; five agents, review interface, telemetry (16/16, 9.03 Bobcoins)</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_tasks20-26_agent_fixes.png"><code>teamexperis_tasks20-26_agent_fixes.png</code></a></td><td>Bob reviewing its own output: telemetry, detector and grammar defects fixed, then merged to <code>dev</code> (3/3, 22.34 Bobcoins)</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_live_gitlab_e2e.png"><code>teamexperis_live_gitlab_e2e.png</code></a></td><td>End-to-end verification against a live GitLab through MCP tools only (12/12, 6.42 Bobcoins)</td></tr>
+      <tr><td><a href="../bob_sessions/teamexperis_bob_budget_used.png"><code>teamexperis_bob_budget_used.png</code></a></td><td>Bob budget consumed across the build: 40.02 of 40.00 Bobcoins</td></tr>
     </tbody>
   </table>
 </main>

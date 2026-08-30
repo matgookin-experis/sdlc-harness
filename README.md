@@ -56,7 +56,7 @@ See the [Problem Statement & Solution](docs/problem-statement.html),
 | `weather-app/` | The demo artefact under governance — plain HTML/CSS/JS, no build step. |
 | `bob-kit/` | Installable source and templates for the Bob skill, MCP server, rules, and mode. See "Installing the Bob skill" below. |
 | `docs/` | Project documentation as self-contained HTML (`docs/index.html` is the entry point). |
-| `bob-sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
+| `bob_sessions/` | Screenshots of Bob task/session summaries captured during the build, kept for hackathon submission. |
 
 ## Running the demo
 

@@ -10,7 +10,7 @@ This file provides guidance to agents when working with code in this repository.
 | `weather-app/` | The demo artefact (plain HTML/CSS/JS, no build step). Served by nginx on port 8081. |
 | `bob-kit/` | Installable source and templates for the Bob skill, MCP server, rules, and mode. Run the installer; files are not used in-place. |
 | `docs/` | Project documentation and implementation plans. |
-| `bob-sessions/` | Bob task-session exports — committed to repo for hackathon submission, not ignored. |
+| `bob_sessions/` | Bob task-session exports — committed to repo for hackathon submission, not ignored. |
 
 ## Stack
 
@@ -65,7 +65,7 @@ This file provides guidance to agents when working with code in this repository.
 - **`.sdlc-harness.json`** is written to the repo root by the onboarding CLI. It contains
   scope/workflow configuration but no credentials and remains gitignored.
 - **MCP server scope is locked to the onboarded project.** The skill must not read/write issues outside the project configured in `.sdlc-harness.json`, even when scanning for dependency links.
-- **`bob-sessions/` is committed** — the `.gitignore` explicitly excludes live AI session state (`.copilot/`, `.cursor/`) but the `bob-sessions/` export folder must be committed for hackathon submission.
+- **`bob_sessions/` is committed** — the `.gitignore` explicitly excludes live AI session state (`.copilot/`, `.cursor/`) but the `bob_sessions/` export folder must be committed for hackathon submission.
 
 ## Bob Kit Installation (one-time, per machine)
 
