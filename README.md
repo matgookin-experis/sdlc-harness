@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/excelerate-ai-outlook-banner.jpg" alt="EXCELERATE AI Outlook Banner" width="100%">
+</p>
+
 <table>
   <tr>
     <td width="120" align="center">
