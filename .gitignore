@@ -142,3 +142,7 @@ docs/demo/
 
 # living task tracker (excluded from version control)
 to-do.md
+
+# Raw Bob task exports can contain credentials, personal data, and machine metadata.
+# Publish a reviewed summary under bob_sessions/ instead.
+bob-tasks-*.json
