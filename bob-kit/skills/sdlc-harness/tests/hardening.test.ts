@@ -566,8 +566,15 @@ describe('clean installation and CLI validation', () => {
     const installer = fs.readFileSync(path.join(ROOT, 'install.sh'), 'utf8');
     const skill = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf8');
     expect(packageJson.scripts['install:skill']).toBe('bash ./install.sh');
-    expect(installer).toContain('npm --prefix "$SKILL_DIR" ci --ignore-scripts');
-    expect(installer).toContain('npm --prefix "$SKILL_DIR" run build');
+    expect(installer).toContain('npm ci --ignore-scripts');
+    expect(installer).toContain('npm run build');
+    // No --prefix/SKILL_DIR round-trip: npm already guarantees this script's
+    // cwd is the target package directory. Re-deriving that path via
+    // BASH_SOURCE and re-passing it to npm as --prefix broke on Windows when
+    // this script ran under WSL bash but npm itself was Windows-native — the
+    // WSL-style path (/mnt/c/...) got silently mangled once handed back to
+    // Windows-native npm, pointing it at a directory with no package.json.
+    expect(installer).not.toContain('--prefix');
     expect(skill).toContain('$HOME/.bob/skills/sdlc-harness');
   });
 

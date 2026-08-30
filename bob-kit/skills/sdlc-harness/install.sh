@@ -2,9 +2,15 @@
 
 set -euo pipefail
 
-SKILL_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Invoked exclusively as the "install:skill" npm lifecycle script (see
+# package.json / SKILL.md), which npm always runs with cwd already set to
+# this package's directory. Deliberately avoid re-deriving that path via
+# BASH_SOURCE and re-passing it explicitly to npm: on Windows, if this
+# script happens to run under WSL bash while npm itself is Windows-native,
+# the WSL-style path (/mnt/c/...) gets silently mangled once handed back to
+# Windows-native npm, pointing it at a directory with no package.json.
 
-npm --prefix "$SKILL_DIR" ci --ignore-scripts
-npm --prefix "$SKILL_DIR" run build
+npm ci --ignore-scripts
+npm run build
 
-test -f "$SKILL_DIR/dist/src/cli.js"
+test -f dist/src/cli.js
